@@ -1,0 +1,59 @@
+Cloudflare Pages + Functions + D1 部署指南（免费）
+
+内容：托管静态网页（viewer.html + 章节文件夹），并用 Pages Functions + D1 实现多人阅读进度同步。
+
+1) 准备仓库
+- 确保以下文件存在：
+  - viewer.html
+  - 凡人修仙传/、凡人修仙传·仙界篇/（切章后的 txt 与 manifest.json）
+  - functions/api/progress.js（进度 API）
+  - functions/api/health.js（健康检查）
+  - d1_schema.sql（数据库表结构）
+
+2) 连接 Cloudflare Pages
+- 登录 Cloudflare Dashboard → Pages → Create a project → Connect to Git → 选择你的仓库。
+- Build 设置：
+  - Framework preset: None
+  - Build command: 留空
+  - Build output directory: /
+  （无构建，直接从仓库根目录发布）
+
+3) 开启 Functions 与 D1 绑定
+- 打开 Pages 项目 → Settings → Functions。
+  - Functions: 开启
+  - D1 database bindings: Add binding
+    - Binding name: DB
+    - Database: 新建或选择一个 D1 实例
+
+4) 初始化数据库表
+- 方式 A（Dashboard）：
+  - Cloudflare Dashboard → D1 → 进入你刚创建的数据库 → Console。
+  - 粘贴并执行仓库里的 d1_schema.sql 内容：
+    CREATE TABLE IF NOT EXISTS progress (
+      username TEXT NOT NULL,
+      book TEXT NOT NULL,
+      idx INTEGER NOT NULL,
+      updated_at REAL NOT NULL,
+      PRIMARY KEY (username, book)
+    );
+- 方式 B（Wrangler，本地可选）：
+  - 安装：npm i -g wrangler
+  - 关联数据库：wrangler d1 execute <DB_NAME> --file=./d1_schema.sql --remote
+
+5) 部署
+- 回到 Pages 项目 → Deployments → 重新部署（或 push 一次代码触发）
+- 部署完成后访问 *.pages.dev 域名即可。
+
+6) 使用
+- 页面顶部“用户名”输入任意昵称（无需密码）后，切换章节会自动同步到云端。
+- 未填用户名时，进度保存在浏览器本地（localStorage）。
+
+7) 自定义域名与 HTTPS（可选）
+- Pages 项目 → Custom domains → 绑定你的域名。
+- 按向导配置 DNS（Cloudflare 托管 DNS 最简单）。
+
+8) 常见问题
+- 看不到 /api/progress：确认 functions/api/progress.js 路径正确，且 Pages → Settings → Functions 已开启，D1 绑定名为 DB。
+- 500 报错：到 D1 Console 确认是否已执行建表 SQL。
+- 章节文件过多：Pages 免费层对文件数与体积有配额，当前两部书（约 2–3k 文件）通常在配额内。
+

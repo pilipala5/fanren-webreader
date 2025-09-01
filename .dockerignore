@@ -1,0 +1,9 @@
+data
+*.log
+__pycache__
+*.pyc
+.git
+.gitignore
+node_modules
+*.swp
+

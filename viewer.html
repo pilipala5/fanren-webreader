@@ -1,0 +1,394 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>凡人修仙传 阅读器</title>
+  <style>
+    :root {
+      --bg: #f5f5f5;          /* 简洁浅灰背景，更利于阅读 */
+      --ink: #1f1f1f;
+      --ink-2: #2b2b2b;
+      --accent: #6c757d;
+      --paper: #ffffff;       /* 内容卡片/标题栏为白色 */
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+      color: var(--ink);
+      background: var(--bg);
+      font-family: "Noto Serif SC", "Songti SC", "SimSun", "STSong", serif;
+    }
+    /* wider toolbar container for the header */
+    .wide { max-width: 1180px; margin: 0 auto; padding: 8px 16px 0; }
+    .page { max-width: 980px; margin: 0 auto; padding: 16px 16px 48px; }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 12px 16px;
+      border: 1px solid #ddd;
+      background: var(--paper);
+      border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.06), inset 0 0 60px rgba(0,0,0,0.03);
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      flex-wrap: nowrap;
+      overflow-x: auto; /* 宽度不足时允许横向滚动而不是换行 */
+      overflow-y: hidden;
+    }
+    h1 {
+      font-weight: 600;
+      font-size: 18px;
+      margin: 0 8px 0 0;
+      letter-spacing: 0.1em;
+      white-space: nowrap;
+      flex: 0 0 auto;
+    }
+    select, button, input[type="text"] {
+      appearance: none;
+      border: 1px solid #cfcfcf;
+      background: #fff;
+      border-radius: 6px;
+      padding: 8px 10px;
+      color: var(--ink);
+      font-size: 14px;
+    }
+    button { white-space: nowrap; }
+    label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+    .label-fixed { flex: 0 0 auto; }
+    .label-grow { flex: 1 1 50%; min-width: 360px; }
+    label select { min-width: 0; max-width: 100%; }
+    #book { max-width: 20em; }
+    #chapter { width: 100%; min-width: 0; }
+    #fs { width: auto; }
+    #username { width: 12em; }
+    button {
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: .4;
+      cursor: default;
+    }
+    .spacer { flex: 1; }
+    .card {
+      margin-top: 16px;
+      background: var(--paper);
+      border: 1px solid #e5e3de;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.07), inset 0 0 120px rgba(0,0,0,0.03);
+    }
+    .title {
+      padding: 18px 24px 0;
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: 0.12em;
+    }
+    .content {
+      padding: 8px 24px 24px;
+      line-height: 1.9;
+      font-size: var(--content-size, 19px);
+      text-align: justify;
+      text-justify: inter-ideograph;
+      white-space: pre-wrap;
+    }
+    .footerbar {
+      display: flex;
+      gap: 8px;
+      justify-content: center;
+      align-items: center;
+      padding: 12px;
+      color: var(--accent);
+      font-size: 13px;
+    }
+    .notice {
+      margin-top: 10px;
+      color: #8c6b3b;
+      background: #fff8e6;
+      border: 1px dashed #d7c4a0;
+      padding: 8px 12px;
+      border-radius: 6px;
+    }
+  </style>
+  <script>
+    // Basic SPA reader that fetches manifests and chapter text
+    const BOOKS = [
+      { key: '凡人修仙传', manifest: '凡人修仙传/manifest.json' },
+      { key: '凡人修仙传·仙界篇', manifest: '凡人修仙传·仙界篇/manifest.json' },
+    ];
+
+    const FS = { small: 16, medium: 19, large: 22 };
+
+    const state = {
+      books: {}, // key -> manifest data
+      currentBook: null,
+      currentIndex: 0,
+      cache: new Map(), // url -> text
+      font: 'medium',
+    };
+
+    async function fetchJSON(url) {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('加载失败: ' + url);
+      return await res.json();
+    }
+
+    async function fetchText(url) {
+      if (state.cache.has(url)) return state.cache.get(url);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('加载失败: ' + url);
+      const txt = await res.text();
+      state.cache.set(url, txt);
+      return txt;
+    }
+
+    function savePosition() {
+      try {
+        localStorage.setItem('novel:last', JSON.stringify({ book: state.currentBook, index: state.currentIndex }));
+      } catch {}
+    }
+    function loadPosition() {
+      try {
+        const v = JSON.parse(localStorage.getItem('novel:last') || 'null');
+        return v || null;
+      } catch { return null; }
+    }
+
+    function $(id){ return document.getElementById(id); }
+    function setContentFont(sizeKey){
+      state.font = sizeKey in FS ? sizeKey : 'medium';
+      document.documentElement.style.setProperty('--content-size', FS[state.font] + 'px');
+      try { localStorage.setItem('novel:fs', state.font); } catch {}
+    }
+
+    async function apiGetProgress(username){
+      try {
+        const r = await fetch(`/api/progress?username=${encodeURIComponent(username)}`);
+        if (!r.ok) throw new Error('http ' + r.status);
+        const j = await r.json();
+        if (j && j.ok) return j.items || {};
+      } catch (e) { console.warn('progress load failed', e); }
+      return {};
+    }
+    async function apiSaveProgress(username, book, index){
+      try {
+        await fetch('/api/progress', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, book, index })
+        });
+      } catch (e) { console.warn('progress save failed', e); }
+    }
+
+    async function init() {
+      const bookSelect = $('book');
+      const chapSelect = $('chapter');
+      const titleEl = $('title');
+      const contentEl = $('content');
+      const noticeEl = $('notice');
+      const fsSelect = $('fs');
+      const userInput = document.getElementById('username');
+
+      // Populate book select
+      BOOKS.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b.key; opt.textContent = b.key;
+        bookSelect.appendChild(opt);
+      });
+
+      // Load manifests
+      try {
+        for (const b of BOOKS) {
+          try {
+            state.books[b.key] = await fetchJSON(b.manifest);
+          } catch (e) {
+            console.warn('Failed manifest', b, e);
+          }
+        }
+      } catch (e) {
+        noticeEl.textContent = '提示：若直接双击打开HTML，浏览器可能禁止读取本地文件。建议在本文件所在目录运行 “python -m http.server 8000” 后，用 http://localhost:8000 打开。';
+      }
+
+      // Fallback if no manifest loaded
+      const keys = Object.keys(state.books);
+      if (keys.length === 0) {
+        noticeEl.textContent = '未能加载清单文件。请在本目录启动本地服务器后再试：python -m http.server 8000';
+        return;
+      }
+
+      // Font size init
+      try {
+        const saved = localStorage.getItem('novel:fs');
+        if (saved && FS[saved]) state.font = saved;
+      } catch {}
+      setContentFont(state.font);
+      fsSelect.value = state.font;
+
+      const last = loadPosition();
+      const defaultBook = last?.book && state.books[last.book] ? last.book : keys[0];
+      state.currentBook = defaultBook;
+      bookSelect.value = defaultBook;
+
+      function renderChapters() {
+        chapSelect.innerHTML = '';
+        const m = state.books[state.currentBook];
+        m.chapters.forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = String(c.index);
+          opt.textContent = String(c.index).padStart(4, '0') + ' · ' + c.title;
+          chapSelect.appendChild(opt);
+        });
+      }
+
+      function updateButtons() {
+        const m = state.books[state.currentBook];
+        const idxs = m.chapters.map(c => c.index);
+        const min = Math.min.apply(null, idxs);
+        const max = Math.max.apply(null, idxs);
+        $('prev').disabled = state.currentIndex <= min;
+        $('next').disabled = state.currentIndex >= max;
+      }
+
+      async function loadCurrent() {
+        const m = state.books[state.currentBook];
+        const chap = m.chapters.find(x => x.index === state.currentIndex) || m.chapters[0];
+        if (!chap) return;
+        chapSelect.value = String(chap.index);
+        titleEl.textContent = chap.title;
+        const url = state.currentBook + '/' + chap.file;
+        try {
+          const text = await fetchText(url);
+          contentEl.textContent = text;
+          window.scrollTo({ top: 0, behavior: 'instant' });
+          noticeEl.textContent = '';
+        } catch (e) {
+          contentEl.textContent = '';
+          noticeEl.textContent = '无法加载章节（可能是本地读取限制）。请启动本地服务器再试：python -m http.server 8000';
+        }
+        updateButtons();
+        savePosition();
+        const uname = userInput && userInput.value ? userInput.value.trim() : '';
+        if (uname) apiSaveProgress(uname, state.currentBook, state.currentIndex);
+      }
+
+      renderChapters();
+      state.currentIndex = last?.index ?? (state.books[state.currentBook].chapters[0]?.index || 0);
+      // Prefer server progress for saved username
+      try {
+        const savedUser = localStorage.getItem('novel:username') || '';
+        if (savedUser && userInput) {
+          userInput.value = savedUser;
+          const items = await apiGetProgress(savedUser);
+          if (Object.prototype.hasOwnProperty.call(items, state.currentBook)) {
+            state.currentIndex = Number(items[state.currentBook]) || state.currentIndex;
+          }
+        }
+      } catch {}
+      await loadCurrent();
+
+      bookSelect.addEventListener('change', async () => {
+        state.currentBook = bookSelect.value;
+        renderChapters();
+        // try to load server-stored progress for this book
+        const uname = userInput && userInput.value ? userInput.value.trim() : '';
+        if (uname) {
+          const items = await apiGetProgress(uname);
+          if (Object.prototype.hasOwnProperty.call(items, state.currentBook)) {
+            state.currentIndex = Number(items[state.currentBook]);
+          } else {
+            state.currentIndex = state.books[state.currentBook].chapters[0]?.index || 0;
+          }
+        } else {
+          state.currentIndex = state.books[state.currentBook].chapters[0]?.index || 0;
+        }
+        await loadCurrent();
+      });
+      chapSelect.addEventListener('change', async () => {
+        state.currentIndex = Number(chapSelect.value);
+        await loadCurrent();
+      });
+      async function gotoPrev(){
+        const m = state.books[state.currentBook];
+        const idxs = m.chapters.map(c => c.index);
+        const pos = idxs.indexOf(state.currentIndex);
+        if (pos > 0) { state.currentIndex = idxs[pos - 1]; await loadCurrent(); }
+      }
+      async function gotoNext(){
+        const m = state.books[state.currentBook];
+        const idxs = m.chapters.map(c => c.index);
+        const pos = idxs.indexOf(state.currentIndex);
+        if (pos >= 0 && pos < idxs.length - 1) { state.currentIndex = idxs[pos + 1]; await loadCurrent(); }
+      }
+      $('prev').addEventListener('click', gotoPrev);
+      $('next').addEventListener('click', gotoNext);
+
+      // Global keyboard: Left/Right to navigate (ignore when typing in inputs)
+      document.addEventListener('keydown', (e) => {
+        if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+        const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
+        if (tag === 'input' || tag === 'textarea' || e.isComposing) return;
+        if (e.key === 'ArrowLeft') { e.preventDefault(); gotoPrev(); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); gotoNext(); }
+      });
+
+      // Prevent Left/Right from changing font select; use them for navigation instead
+      fsSelect.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowLeft') { e.preventDefault(); gotoPrev(); }
+        else if (e.key === 'ArrowRight') { e.preventDefault(); gotoNext(); }
+      });
+      fsSelect.addEventListener('change', () => setContentFont(fsSelect.value));
+
+      if (userInput) {
+        userInput.addEventListener('change', async () => {
+          const name = userInput.value.trim();
+          try { localStorage.setItem('novel:username', name); } catch {}
+          if (name) {
+            const items = await apiGetProgress(name);
+            if (Object.prototype.hasOwnProperty.call(items, state.currentBook)) {
+              state.currentIndex = Number(items[state.currentBook]);
+              await loadCurrent();
+            }
+          }
+        });
+      }
+    }
+
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</head>
+  <body>
+  <div class="wide">
+    <header>
+      <h1>凡人修仙传 · 阅读器</h1>
+      <label class="label-fixed">书本：<select id="book"></select></label>
+      <label class="label-grow">章节：<select id="chapter"></select></label>
+      <label class="label-fixed">用户名：<input id="username" type="text" placeholder="用户名" /></label>
+      <label class="label-fixed">字号：
+        <select id="fs">
+          <option value="small">小</option>
+          <option value="medium">中</option>
+          <option value="large">大</option>
+        </select>
+      </label>
+      <div class="spacer"></div>
+      <button class="nav-btn" id="prev" title="上一章（←）">上一章</button>
+      <button class="nav-btn" id="next" title="下一章（→）">下一章</button>
+      </header>
+  </div>
+
+  <div class="page">
+
+    <div class="notice" id="notice"></div>
+
+    <div class="card">
+      <div class="title" id="title"></div>
+      <div class="content" id="content"></div>
+      <div class="footerbar">
+        <span>快捷键：← 上一章 · → 下一章</span>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

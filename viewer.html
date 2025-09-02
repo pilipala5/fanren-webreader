@@ -50,6 +50,10 @@
     .row label { font-size: 12px; color: #666; }
     .row input { width: 100%; }
     .actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 6px; }
+    /* Bottom navigation for mobile */
+    .bottom-nav { position: sticky; bottom: 0; z-index: 50; background: var(--paper); border: 1px solid #ddd; border-radius: 12px; margin: 16px 0 0; display: flex; gap: 12px; justify-content: center; align-items: center; box-shadow: 0 -8px 24px rgba(0,0,0,0.06); padding: 10px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+    .bottom-nav .nav-btn { flex: 0 0 auto; min-width: 120px; font-size: 16px; padding: 12px 16px; }
+    @media (max-width: 560px) { .bottom-nav .nav-btn { flex: 1 1 45%; font-size: 17px; padding: 14px; } }
   </style>
   <script>
     const BOOKS = [
@@ -245,7 +249,3 @@
   </div>
 </body>
 </html>
-    /* Bottom navigation for mobile */
-    .bottom-nav { position: sticky; bottom: 0; z-index: 50; background: var(--paper); border: 1px solid #ddd; border-radius: 12px; padding: 10px; margin: 16px 0 0; display: flex; gap: 12px; justify-content: center; align-items: center; box-shadow: 0 -8px 24px rgba(0,0,0,0.06); padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
-    .bottom-nav .nav-btn { flex: 1 1 40%; min-width: 120px; font-size: 16px; padding: 12px; }
-    @media (max-width: 560px) { .bottom-nav .nav-btn { font-size: 17px; padding: 14px; } }

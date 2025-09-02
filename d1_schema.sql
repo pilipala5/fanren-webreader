@@ -7,3 +7,10 @@ CREATE TABLE IF NOT EXISTS progress (
   PRIMARY KEY (username, book)
 );
 
+-- Users table for simple auth (username unique)
+CREATE TABLE IF NOT EXISTS users (
+  username TEXT PRIMARY KEY,
+  pass_hash TEXT NOT NULL,
+  salt TEXT NOT NULL,
+  created_at REAL NOT NULL
+);

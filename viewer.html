@@ -3,59 +3,22 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>凡人修仙传 阅读器</title>
+  <title>凡人修仙传 · 阅读器</title>
   <style>
     :root {
-      --bg: #f5f5f5;          /* 简洁浅灰背景，更利于阅读 */
+      --bg: #f5f5f5;
       --ink: #1f1f1f;
       --ink-2: #2b2b2b;
       --accent: #6c757d;
-      --paper: #ffffff;       /* 内容卡片/标题栏为白色 */
+      --paper: #ffffff;
+      --content-size: 19px;
     }
-    html, body {
-      height: 100%;
-      margin: 0;
-      color: var(--ink);
-      background: var(--bg);
-      font-family: "Noto Serif SC", "Songti SC", "SimSun", "STSong", serif;
-    }
-    /* wider toolbar container for the header */
+    html, body { height: 100%; margin: 0; color: var(--ink); background: var(--bg); font-family: "Noto Serif SC", "Songti SC", "SimSun", "STSong", serif; }
     .wide { max-width: 1180px; margin: 0 auto; padding: 8px 16px 0; }
     .page { max-width: 980px; margin: 0 auto; padding: 16px 16px 48px; }
-    header {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px 16px;
-      border: 1px solid #ddd;
-      background: var(--paper);
-      border-radius: 8px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.06), inset 0 0 60px rgba(0,0,0,0.03);
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      flex-wrap: nowrap;
-      overflow-x: auto; /* 宽度不足时允许横向滚动而不是换行 */
-      overflow-y: hidden;
-    }
-    h1 {
-      font-weight: 600;
-      font-size: 18px;
-      margin: 0 8px 0 0;
-      letter-spacing: 0.1em;
-      white-space: nowrap;
-      flex: 0 0 auto;
-    }
-    select, button, input[type="text"] {
-      appearance: none;
-      border: 1px solid #cfcfcf;
-      background: #fff;
-      border-radius: 6px;
-      padding: 8px 10px;
-      color: var(--ink);
-      font-size: 14px;
-    }
-    button { white-space: nowrap; }
+    header { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border: 1px solid #ddd; background: var(--paper); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.06), inset 0 0 60px rgba(0,0,0,0.03); position: sticky; top: 0; z-index: 10; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; }
+    h1 { font-weight: 600; font-size: 18px; margin: 0 8px 0 0; letter-spacing: 0.1em; white-space: nowrap; flex: 0 0 auto; }
+    select, button, input[type="text"], input[type="password"] { appearance: none; border: 1px solid #cfcfcf; background: #fff; border-radius: 6px; padding: 8px 10px; color: var(--ink); font-size: 14px; }
     label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
     .label-fixed { flex: 0 0 auto; }
     .label-grow { flex: 1 1 50%; min-width: 360px; }
@@ -63,308 +26,143 @@
     #book { max-width: 20em; }
     #chapter { width: 100%; min-width: 0; }
     #fs { width: auto; }
-    #username { width: 12em; }
-    button {
-      cursor: pointer;
-    }
-    button:disabled {
-      opacity: .4;
-      cursor: default;
-    }
+    button { cursor: pointer; white-space: nowrap; }
+    button:disabled { opacity: .4; cursor: default; }
     .spacer { flex: 1; }
-    .card {
-      margin-top: 16px;
-      background: var(--paper);
-      border: 1px solid #e5e3de;
-      border-radius: 10px;
-      overflow: hidden;
-      box-shadow: 0 10px 40px rgba(0,0,0,0.07), inset 0 0 120px rgba(0,0,0,0.03);
-    }
-    .title {
-      padding: 18px 24px 0;
-      font-size: 20px;
-      font-weight: 600;
-      letter-spacing: 0.12em;
-    }
-    .content {
-      padding: 8px 24px 24px;
-      line-height: 1.9;
-      font-size: var(--content-size, 19px);
-      text-align: justify;
-      text-justify: inter-ideograph;
-      white-space: pre-wrap;
-    }
-    .footerbar {
-      display: flex;
-      gap: 8px;
-      justify-content: center;
-      align-items: center;
-      padding: 12px;
-      color: var(--accent);
-      font-size: 13px;
-    }
-    .notice {
-      margin-top: 10px;
-      color: #8c6b3b;
-      background: #fff8e6;
-      border: 1px dashed #d7c4a0;
-      padding: 8px 12px;
-      border-radius: 6px;
-    }
+    .user { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+    .user-btn { width: 32px; height: 32px; border-radius: 50%; border: 1px solid #cfcfcf; background: #fff; display: flex; align-items: center; justify-content: center; font-weight: 600; }
+    .user-name { max-width: 12em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+    .user-anon { color: #888; }
+    .user-menu { position: relative; display: flex; align-items: center; gap: 8px; }
+    .dropdown { position: absolute; right: 0; top: calc(100% + 6px); background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.12); padding: 6px; min-width: 160px; display: none; z-index: 20; }
+    .dropdown.show { display: block; }
+    .dropdown button { width: 100%; text-align: left; background: transparent; border: none; padding: 8px 10px; border-radius: 6px; }
+    .dropdown button:hover { background: #f3f3f3; }
+    .card { margin-top: 16px; background: var(--paper); border: 1px solid #e5e3de; border-radius: 10px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.07), inset 0 0 120px rgba(0,0,0,0.03); }
+    .title { padding: 18px 24px 0; font-size: 20px; font-weight: 600; letter-spacing: 0.12em; }
+    .content { padding: 8px 24px 24px; line-height: 1.9; font-size: var(--content-size); text-align: justify; text-justify: inter-ideograph; white-space: pre-wrap; }
+    .footerbar { display: flex; gap: 8px; justify-content: center; align-items: center; padding: 12px; color: var(--accent); font-size: 13px; }
+    .notice { margin-top: 10px; color: #8c6b3b; background: #fff8e6; border: 1px dashed #d7c4a0; padding: 8px 12px; border-radius: 6px; }
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center; z-index: 100; }
+    .modal-backdrop[hidden] { display: none !important; }
+    .modal { width: 360px; max-width: 92vw; background: #fff; border-radius: 10px; box-shadow: 0 20px 80px rgba(0,0,0,0.25); overflow: hidden; border: 1px solid #ddd; }
+    .modal .tabs { display: flex; gap: 8px; padding: 10px 16px; border-bottom: 1px solid #eee; background: #fafafa; align-items: center; }
+    .modal .tabs button { border: none; background: transparent; padding: 8px 10px; border-bottom: 2px solid transparent; }
+    .modal .tabs button.active { border-bottom-color: #333; font-weight: 600; }
+    .modal .body { padding: 16px; display: grid; gap: 10px; }
+    .row { display: grid; gap: 6px; }
+    .row label { font-size: 12px; color: #666; }
+    .row input { width: 100%; }
+    .actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 6px; }
   </style>
   <script>
-    // Basic SPA reader that fetches manifests and chapter text
     const BOOKS = [
       { key: '凡人修仙传', manifest: '凡人修仙传/manifest.json' },
       { key: '凡人修仙传·仙界篇', manifest: '凡人修仙传·仙界篇/manifest.json' },
     ];
-
     const FS = { small: 16, medium: 19, large: 22 };
+    const state = { books: {}, currentBook: null, currentIndex: 0, cache: new Map(), font: 'medium', userName: null };
+    let API_AVAILABLE = false; // 默认离线，避免首页网络探测造成 404
 
-    const state = {
-      books: {}, // key -> manifest data
-      currentBook: null,
-      currentIndex: 0,
-      cache: new Map(), // url -> text
-      font: 'medium',
-    };
-
-    async function fetchJSON(url) {
-      const res = await fetch(url);
-      if (!res.ok) throw new Error('加载失败: ' + url);
-      return await res.json();
-    }
-
-    async function fetchText(url) {
-      if (state.cache.has(url)) return state.cache.get(url);
-      const res = await fetch(url);
-      if (!res.ok) throw new Error('加载失败: ' + url);
-      const txt = await res.text();
-      state.cache.set(url, txt);
-      return txt;
-    }
-
-    function savePosition() {
-      try {
-        localStorage.setItem('novel:last', JSON.stringify({ book: state.currentBook, index: state.currentIndex }));
-      } catch {}
-    }
-    function loadPosition() {
-      try {
-        const v = JSON.parse(localStorage.getItem('novel:last') || 'null');
-        return v || null;
-      } catch { return null; }
-    }
-
+    async function fetchJSON(url) { const r = await fetch(url); if (!r.ok) throw new Error('加载失败: ' + url); return await r.json(); }
+    async function fetchText(url) { if (state.cache.has(url)) return state.cache.get(url); const r = await fetch(url); if (!r.ok) throw new Error('加载失败: ' + url); const t = await r.text(); state.cache.set(url, t); return t; }
+    function savePosition(){ try{ localStorage.setItem('novel:last', JSON.stringify({book: state.currentBook, index: state.currentIndex})); }catch{} }
+    function loadPosition(){ try{ return JSON.parse(localStorage.getItem('novel:last')||'null')||null; }catch{return null;} }
     function $(id){ return document.getElementById(id); }
-    function setContentFont(sizeKey){
-      state.font = sizeKey in FS ? sizeKey : 'medium';
-      document.documentElement.style.setProperty('--content-size', FS[state.font] + 'px');
-      try { localStorage.setItem('novel:fs', state.font); } catch {}
+    function setContentFont(key){ state.font = FS[key]? key : 'medium'; document.documentElement.style.setProperty('--content-size', FS[state.font]+'px'); try{ localStorage.setItem('novel:fs', state.font);}catch{} }
+
+    async function apiGetProgress(){ try{ const r=await fetch('/api/progress'); if(!r.ok) throw 0; const j=await r.json(); return j.ok? (j.items||{}) : {}; }catch{return {};} }
+    async function apiSaveProgress(book, index){ try{ await fetch('/api/progress',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({book,index})}); }catch{} }
+    async function authMe(){ if(!API_AVAILABLE) return null; try{ const r=await fetch('/api/auth/me'); if(!r.ok) return null; return await r.json(); }catch{return null;} }
+    async function authLogin(username,password){ if(!API_AVAILABLE) return { ok:false, error:'api disabled' }; const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})}); return await r.json(); }
+    async function authRegister(username,password){ if(!API_AVAILABLE) return { ok:false, error:'api disabled' }; const r=await fetch('/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})}); return await r.json(); }
+    async function authLogout(){ if(!API_AVAILABLE) return; try{ await fetch('/api/auth/logout',{method:'POST'}); }catch{} }
+
+    async function checkApiAvailable(){
+      try{
+        const ctrl = new AbortController();
+        const timer = setTimeout(()=>ctrl.abort(), 1500);
+        const r = await fetch('/api/health', { signal: ctrl.signal });
+        clearTimeout(timer);
+        return r.ok;
+      }catch{ return false; }
     }
 
-    async function apiGetProgress(username){
-      try {
-        const r = await fetch(`/api/progress?username=${encodeURIComponent(username)}`);
-        if (!r.ok) throw new Error('http ' + r.status);
-        const j = await r.json();
-        if (j && j.ok) return j.items || {};
-      } catch (e) { console.warn('progress load failed', e); }
-      return {};
-    }
-    async function apiSaveProgress(username, book, index){
-      try {
-        await fetch('/api/progress', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, book, index })
-        });
-      } catch (e) { console.warn('progress save failed', e); }
-    }
+    async function init(){
+      const bookSelect=$('book'), chapSelect=$('chapter'), titleEl=$('title'), contentEl=$('content'), noticeEl=$('notice'), fsSelect=$('fs');
+      const userMenu=$('userMenu'), userBtn=$('userBtn'), userNameEl=$('userName'), menu=$('userDropdown'), menuLogin=$('menuLogin'), menuLogout=$('menuLogout');
+      const modal=$('authModal'), tabLogin=$('tabLogin'), tabRegister=$('tabRegister'), formLogin=$('formLogin'), formRegister=$('formRegister');
+      const btnCloseModal=$('btnCloseModal');
+      // 强制关闭弹窗，防止某些环境初始状态异常
+      if (modal) modal.hidden = true;
 
-    async function init() {
-      const bookSelect = $('book');
-      const chapSelect = $('chapter');
-      const titleEl = $('title');
-      const contentEl = $('content');
-      const noticeEl = $('notice');
-      const fsSelect = $('fs');
-      const userInput = document.getElementById('username');
-
-      // Populate book select
-      BOOKS.forEach(b => {
-        const opt = document.createElement('option');
-        opt.value = b.key; opt.textContent = b.key;
-        bookSelect.appendChild(opt);
-      });
+      // Populate books
+      BOOKS.forEach(b=>{ const o=document.createElement('option'); o.value=b.key; o.textContent=b.key; bookSelect.appendChild(o); });
 
       // Load manifests
-      try {
-        for (const b of BOOKS) {
-          try {
-            state.books[b.key] = await fetchJSON(b.manifest);
-          } catch (e) {
-            console.warn('Failed manifest', b, e);
-          }
+      try{ for(const b of BOOKS){ try{ state.books[b.key]=await fetchJSON(b.manifest);}catch(e){ console.warn('manifest fail',b,e);} } }
+      catch{ noticeEl.textContent='提示：若直接双击打开HTML，浏览器可能禁止读取本地文件。建议运行 “python -m http.server 8000” 后，用 http://localhost:8000 打开。'; }
+
+      const keys=Object.keys(state.books); if(keys.length===0){ noticeEl.textContent='未能加载清单文件。'; return; }
+
+      try{ const saved=localStorage.getItem('novel:fs'); if(saved&&FS[saved]) state.font=saved; }catch{}
+      setContentFont(state.font); fsSelect.value=state.font;
+
+      const last=loadPosition(); const defaultBook= last?.book && state.books[last.book] ? last.book : keys[0]; state.currentBook=defaultBook; bookSelect.value=defaultBook;
+      // 初始隐藏用户菜单（仅在需要时检测 API、再显示）
+      userMenu.style.display = 'none';
+
+      function updateUserMenu(){ if(!API_AVAILABLE){ userMenu.style.display='none'; return; } userMenu.style.display='flex'; if(state.userName){ menuLogin.style.display='none'; menuLogout.style.display='block'; userBtn.title='账户'; } else { menuLogin.style.display='block'; menuLogout.style.display='none'; userBtn.title='登录/注册'; } }
+      async function refreshUserUI(){ if(!API_AVAILABLE){ userMenu.style.display='none'; return false; } const me=await authMe(); if(me&&me.ok&&me.loggedIn){ state.userName=me.username; userBtn.textContent=(state.userName[0]||'?').toUpperCase(); userNameEl.textContent=state.userName; userNameEl.classList.remove('user-anon'); updateUserMenu(); return true; } else { state.userName=null; userBtn.textContent='登'; userNameEl.textContent='未登录'; userNameEl.classList.add('user-anon'); updateUserMenu(); return false; } }
+      async function ensureApi(){ if(API_AVAILABLE) return true; const ok = await checkApiAvailable(); API_AVAILABLE = !!ok; if(!API_AVAILABLE){ // 离线模式
+          userMenu.style.display='none';
+          return false;
+        } else {
+          await refreshUserUI();
+          return true;
         }
-      } catch (e) {
-        noticeEl.textContent = '提示：若直接双击打开HTML，浏览器可能禁止读取本地文件。建议在本文件所在目录运行 “python -m http.server 8000” 后，用 http://localhost:8000 打开。';
       }
 
-      // Fallback if no manifest loaded
-      const keys = Object.keys(state.books);
-      if (keys.length === 0) {
-        noticeEl.textContent = '未能加载清单文件。请在本目录启动本地服务器后再试：python -m http.server 8000';
-        return;
-      }
+      function renderChapters(){ chapSelect.innerHTML=''; const m=state.books[state.currentBook]; m.chapters.forEach(c=>{ const o=document.createElement('option'); o.value=String(c.index); o.textContent=String(c.index).padStart(4,'0')+' · '+c.title; chapSelect.appendChild(o); }); }
+      function updateButtons(){ const m=state.books[state.currentBook]; const idxs=m.chapters.map(c=>c.index); const min=Math.min.apply(null,idxs); const max=Math.max.apply(null,idxs); $('prev').disabled=state.currentIndex<=min; $('next').disabled=state.currentIndex>=max; }
+      async function loadCurrent(){ const m=state.books[state.currentBook]; const chap=m.chapters.find(x=>x.index===state.currentIndex)||m.chapters[0]; if(!chap) return; chapSelect.value=String(chap.index); titleEl.textContent=chap.title; const url=state.currentBook+'/'+chap.file; try{ const text=await fetchText(url); contentEl.textContent=text; window.scrollTo({top:0,behavior:'instant'}); noticeEl.textContent=''; }catch(e){ contentEl.textContent=''; noticeEl.textContent='无法加载章节。'; } updateButtons(); savePosition(); if(state.userName) apiSaveProgress(state.currentBook,state.currentIndex); }
 
-      // Font size init
-      try {
-        const saved = localStorage.getItem('novel:fs');
-        if (saved && FS[saved]) state.font = saved;
-      } catch {}
-      setContentFont(state.font);
-      fsSelect.value = state.font;
-
-      const last = loadPosition();
-      const defaultBook = last?.book && state.books[last.book] ? last.book : keys[0];
-      state.currentBook = defaultBook;
-      bookSelect.value = defaultBook;
-
-      function renderChapters() {
-        chapSelect.innerHTML = '';
-        const m = state.books[state.currentBook];
-        m.chapters.forEach(c => {
-          const opt = document.createElement('option');
-          opt.value = String(c.index);
-          opt.textContent = String(c.index).padStart(4, '0') + ' · ' + c.title;
-          chapSelect.appendChild(opt);
-        });
-      }
-
-      function updateButtons() {
-        const m = state.books[state.currentBook];
-        const idxs = m.chapters.map(c => c.index);
-        const min = Math.min.apply(null, idxs);
-        const max = Math.max.apply(null, idxs);
-        $('prev').disabled = state.currentIndex <= min;
-        $('next').disabled = state.currentIndex >= max;
-      }
-
-      async function loadCurrent() {
-        const m = state.books[state.currentBook];
-        const chap = m.chapters.find(x => x.index === state.currentIndex) || m.chapters[0];
-        if (!chap) return;
-        chapSelect.value = String(chap.index);
-        titleEl.textContent = chap.title;
-        const url = state.currentBook + '/' + chap.file;
-        try {
-          const text = await fetchText(url);
-          contentEl.textContent = text;
-          window.scrollTo({ top: 0, behavior: 'instant' });
-          noticeEl.textContent = '';
-        } catch (e) {
-          contentEl.textContent = '';
-          noticeEl.textContent = '无法加载章节（可能是本地读取限制）。请启动本地服务器再试：python -m http.server 8000';
-        }
-        updateButtons();
-        savePosition();
-        const uname = userInput && userInput.value ? userInput.value.trim() : '';
-        if (uname) apiSaveProgress(uname, state.currentBook, state.currentIndex);
-      }
-
-      renderChapters();
-      state.currentIndex = last?.index ?? (state.books[state.currentBook].chapters[0]?.index || 0);
-      // Prefer server progress for saved username
-      try {
-        const savedUser = localStorage.getItem('novel:username') || '';
-        if (savedUser && userInput) {
-          userInput.value = savedUser;
-          const items = await apiGetProgress(savedUser);
-          if (Object.prototype.hasOwnProperty.call(items, state.currentBook)) {
-            state.currentIndex = Number(items[state.currentBook]) || state.currentIndex;
-          }
-        }
-      } catch {}
+      renderChapters(); state.currentIndex = last?.index ?? (state.books[state.currentBook].chapters[0]?.index || 0);
+      // 初始不探测 API，避免本地静态预览产生 404。仅本地保存进度即可。
       await loadCurrent();
 
-      bookSelect.addEventListener('change', async () => {
-        state.currentBook = bookSelect.value;
-        renderChapters();
-        // try to load server-stored progress for this book
-        const uname = userInput && userInput.value ? userInput.value.trim() : '';
-        if (uname) {
-          const items = await apiGetProgress(uname);
-          if (Object.prototype.hasOwnProperty.call(items, state.currentBook)) {
-            state.currentIndex = Number(items[state.currentBook]);
-          } else {
-            state.currentIndex = state.books[state.currentBook].chapters[0]?.index || 0;
-          }
-        } else {
-          state.currentIndex = state.books[state.currentBook].chapters[0]?.index || 0;
-        }
-        await loadCurrent();
-      });
-      chapSelect.addEventListener('change', async () => {
-        state.currentIndex = Number(chapSelect.value);
-        await loadCurrent();
-      });
-      async function gotoPrev(){
-        const m = state.books[state.currentBook];
-        const idxs = m.chapters.map(c => c.index);
-        const pos = idxs.indexOf(state.currentIndex);
-        if (pos > 0) { state.currentIndex = idxs[pos - 1]; await loadCurrent(); }
-      }
-      async function gotoNext(){
-        const m = state.books[state.currentBook];
-        const idxs = m.chapters.map(c => c.index);
-        const pos = idxs.indexOf(state.currentIndex);
-        if (pos >= 0 && pos < idxs.length - 1) { state.currentIndex = idxs[pos + 1]; await loadCurrent(); }
-      }
-      $('prev').addEventListener('click', gotoPrev);
-      $('next').addEventListener('click', gotoNext);
+      bookSelect.addEventListener('change', async ()=>{ state.currentBook=bookSelect.value; renderChapters(); if(API_AVAILABLE && state.userName){ const items=await apiGetProgress(); if(Object.prototype.hasOwnProperty.call(items,state.currentBook)) state.currentIndex=Number(items[state.currentBook]); else state.currentIndex=state.books[state.currentBook].chapters[0]?.index||0; } else { state.currentIndex=state.books[state.currentBook].chapters[0]?.index||0; } await loadCurrent(); });
+      chapSelect.addEventListener('change', async ()=>{ state.currentIndex=Number(chapSelect.value); await loadCurrent(); });
+      async function gotoPrev(){ const m=state.books[state.currentBook]; const idxs=m.chapters.map(c=>c.index); const pos=idxs.indexOf(state.currentIndex); if(pos>0){ state.currentIndex=idxs[pos-1]; await loadCurrent(); } }
+      async function gotoNext(){ const m=state.books[state.currentBook]; const idxs=m.chapters.map(c=>c.index); const pos=idxs.indexOf(state.currentIndex); if(pos>=0&&pos<idxs.length-1){ state.currentIndex=idxs[pos+1]; await loadCurrent(); } }
+      $('prev').addEventListener('click', gotoPrev); $('next').addEventListener('click', gotoNext);
+      document.addEventListener('keydown', (e)=>{ if(e.altKey||e.ctrlKey||e.metaKey||e.shiftKey) return; const tag=(e.target&&e.target.tagName)? e.target.tagName.toLowerCase():''; if(tag==='input'||tag==='textarea'||e.isComposing) return; if(e.key==='ArrowLeft'){ e.preventDefault(); gotoPrev(); } else if(e.key==='ArrowRight'){ e.preventDefault(); gotoNext(); } });
+      fsSelect.addEventListener('keydown', (e)=>{ if(e.key==='ArrowLeft'){ e.preventDefault(); gotoPrev(); } else if(e.key==='ArrowRight'){ e.preventDefault(); gotoNext(); } });
+      fsSelect.addEventListener('change', ()=> setContentFont(fsSelect.value));
 
-      // Global keyboard: Left/Right to navigate (ignore when typing in inputs)
-      document.addEventListener('keydown', (e) => {
-        if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-        const tag = (e.target && e.target.tagName) ? e.target.tagName.toLowerCase() : '';
-        if (tag === 'input' || tag === 'textarea' || e.isComposing) return;
-        if (e.key === 'ArrowLeft') { e.preventDefault(); gotoPrev(); }
-        else if (e.key === 'ArrowRight') { e.preventDefault(); gotoNext(); }
-      });
-
-      // Prevent Left/Right from changing font select; use them for navigation instead
-      fsSelect.addEventListener('keydown', (e) => {
-        if (e.key === 'ArrowLeft') { e.preventDefault(); gotoPrev(); }
-        else if (e.key === 'ArrowRight') { e.preventDefault(); gotoNext(); }
-      });
-      fsSelect.addEventListener('change', () => setContentFont(fsSelect.value));
-
-      if (userInput) {
-        userInput.addEventListener('change', async () => {
-          const name = userInput.value.trim();
-          try { localStorage.setItem('novel:username', name); } catch {}
-          if (name) {
-            const items = await apiGetProgress(name);
-            if (Object.prototype.hasOwnProperty.call(items, state.currentBook)) {
-              state.currentIndex = Number(items[state.currentBook]);
-              await loadCurrent();
-            }
-          }
-        });
-      }
+      function openModal(which='login'){ if(!API_AVAILABLE){ alert('当前为离线模式，未连接进度服务器'); return; } modal.hidden=false; if(which==='register'){ tabRegister.classList.add('active'); tabLogin.classList.remove('active'); formRegister.hidden=false; formLogin.hidden=true; } else { tabLogin.classList.add('active'); tabRegister.classList.remove('active'); formLogin.hidden=false; formRegister.hidden=true; } }
+      function closeModal(){ modal.hidden=true; }
+      async function toggleMenu(){ if(!API_AVAILABLE){ const ok = await ensureApi(); if(!ok) return; } menu.classList.toggle('show'); }
+      userBtn.addEventListener('click', (e)=>{ e.stopPropagation(); toggleMenu(); });
+      document.addEventListener('click', ()=>{ menu.classList.remove('show'); });
+      menuLogin.addEventListener('click', (e)=>{ e.preventDefault(); menu.classList.remove('show'); openModal('login'); });
+      menuLogout.addEventListener('click', async (e)=>{ e.preventDefault(); menu.classList.remove('show'); if(confirm('确认退出登录？')){ await authLogout(); await refreshUserUI(); }});
+      tabLogin.addEventListener('click', ()=> openModal('login')); tabRegister.addEventListener('click', ()=> openModal('register')); modal.addEventListener('click', (e)=>{ if(e.target===modal) closeModal(); });
+      btnCloseModal.addEventListener('click', closeModal);
+      document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && !modal.hidden) { closeModal(); } });
+      formLogin.addEventListener('submit', async (e)=>{ e.preventDefault(); const u=$('login_username').value.trim(); const p=$('login_password').value; const r=await authLogin(u,p); if(r&&r.ok){ closeModal(); await refreshUserUI(); const items=await apiGetProgress(); if(Object.prototype.hasOwnProperty.call(items,state.currentBook)){ state.currentIndex=Number(items[state.currentBook]); await loadCurrent(); } } else alert(r?.error||'登录失败'); });
+      formRegister.addEventListener('submit', async (e)=>{ e.preventDefault(); const u=$('reg_username').value.trim(); const p=$('reg_password').value; if(!/^[A-Za-z0-9_\-.]{3,32}$/.test(u)){ alert('用户名 3-32 位（字母数字_-.）'); return; } if(p.length<6){ alert('密码至少 6 位'); return; } const r=await authRegister(u,p); if(r&&r.ok){ closeModal(); await refreshUserUI(); } else alert(r?.error||'注册失败'); });
     }
 
     window.addEventListener('DOMContentLoaded', init);
   </script>
 </head>
-  <body>
+<body>
   <div class="wide">
     <header>
       <h1>凡人修仙传 · 阅读器</h1>
       <label class="label-fixed">书本：<select id="book"></select></label>
       <label class="label-grow">章节：<select id="chapter"></select></label>
-      <label class="label-fixed">用户名：<input id="username" type="text" placeholder="用户名" /></label>
       <label class="label-fixed">字号：
         <select id="fs">
           <option value="small">小</option>
@@ -373,20 +171,45 @@
         </select>
       </label>
       <div class="spacer"></div>
+      <div id="userMenu" class="user-menu user">
+        <button id="userBtn" class="user-btn" title="登录/登出">登</button>
+        <span id="userName" class="user-name user-anon">未登录</span>
+        <div id="userDropdown" class="dropdown">
+          <button id="menuLogin">登录 / 注册…</button>
+          <button id="menuLogout" style="display:none">退出登录</button>
+        </div>
+      </div>
       <button class="nav-btn" id="prev" title="上一章（←）">上一章</button>
       <button class="nav-btn" id="next" title="下一章（→）">下一章</button>
-      </header>
+    </header>
   </div>
-
   <div class="page">
-
     <div class="notice" id="notice"></div>
-
     <div class="card">
       <div class="title" id="title"></div>
       <div class="content" id="content"></div>
-      <div class="footerbar">
-        <span>快捷键：← 上一章 · → 下一章</span>
+      <div class="footerbar"><span>快捷键：← 上一章 · → 下一章</span></div>
+    </div>
+  </div>
+  <div class="modal-backdrop" id="authModal" hidden>
+    <div class="modal">
+      <div class="tabs">
+        <button id="tabLogin" class="active">登录</button>
+        <button id="tabRegister">注册</button>
+        <div class="spacer"></div>
+        <button id="btnCloseModal" title="关闭">关闭</button>
+      </div>
+      <div class="body">
+        <form id="formLogin" class="panel">
+          <div class="row"><label>用户名</label><input id="login_username" type="text" autocomplete="username" /></div>
+          <div class="row"><label>密码</label><input id="login_password" type="password" autocomplete="current-password" /></div>
+          <div class="actions"><button type="submit">登录</button></div>
+        </form>
+        <form id="formRegister" class="panel" hidden>
+          <div class="row"><label>用户名（3-32位：字母数字_-.）</label><input id="reg_username" type="text" autocomplete="username" /></div>
+          <div class="row"><label>密码（≥6位）</label><input id="reg_password" type="password" autocomplete="new-password" /></div>
+          <div class="actions"><button type="submit">注册并登录</button></div>
+        </form>
       </div>
     </div>
   </div>

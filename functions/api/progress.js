@@ -11,6 +11,8 @@
  * Bind D1 as "DB" in Pages → Settings → Functions → D1 Bindings.
  */
 
+import { getCookie, verifyToken } from '../../_lib/auth.js';
+
 const cors = (req) => ({
   'Access-Control-Allow-Origin': req.headers.get('Origin') || '*',
   'Access-Control-Allow-Headers': 'Content-Type',
@@ -26,11 +28,17 @@ export async function onRequestOptions({ request }) {
   return new Response(null, { status: 204, headers: cors(request) });
 }
 
-export async function onRequestGet({ request, env }) {
-  const url = new URL(request.url);
-  const username = (url.searchParams.get('username') || '').trim();
-  if (!username) return json(request, { ok: false, error: 'missing username' }, { status: 400 });
+async function requireUser(request, env) {
+  const token = getCookie(request, 'session');
+  if (!token) return null;
+  const payload = await verifyToken(env.AUTH_SECRET, token);
+  if (!payload || !payload.u) return null;
+  return payload.u;
+}
 
+export async function onRequestGet({ request, env }) {
+  const username = await requireUser(request, env);
+  if (!username) return json(request, { ok: false, error: 'unauthorized' }, { status: 401 });
   try {
     const { results } = await env.DB.prepare('SELECT book, idx FROM progress WHERE username = ?').bind(username).all();
     const items = {};
@@ -42,18 +50,11 @@ export async function onRequestGet({ request, env }) {
 }
 
 export async function onRequestPost({ request, env }) {
+  const username = await requireUser(request, env);
+  if (!username) return json(request, { ok: false, error: 'unauthorized' }, { status: 401 });
   let data;
-  try {
-    data = await request.json();
-  } catch (_) {
-    return json(request, { ok: false, error: 'invalid json' }, { status: 400 });
-  }
-
-  const username = (data?.username || '').trim();
-  if (!username) return json(request, { ok: false, error: 'missing username' }, { status: 400 });
-
+  try { data = await request.json(); } catch { return json(request, { ok: false, error: 'invalid json' }, { status: 400 }); }
   const now = Date.now() / 1000;
-
   try {
     if (data && typeof data.items === 'object' && data.items) {
       const stmts = [];
@@ -67,11 +68,9 @@ export async function onRequestPost({ request, env }) {
       if (stmts.length) await env.DB.batch(stmts);
       return json(request, { ok: true });
     }
-
     const book = String(data?.book || '').trim();
     const idx = Number.parseInt(data?.index, 10);
     if (!book || Number.isNaN(idx)) return json(request, { ok: false, error: 'missing book/index' }, { status: 400 });
-
     await env.DB
       .prepare('INSERT INTO progress(username, book, idx, updated_at) VALUES(?,?,?,?) ON CONFLICT(username, book) DO UPDATE SET idx=excluded.idx, updated_at=excluded.updated_at')
       .bind(username, book, idx, now)
@@ -81,4 +80,3 @@ export async function onRequestPost({ request, env }) {
     return json(request, { ok: false, error: String(e) }, { status: 500 });
   }
 }
-

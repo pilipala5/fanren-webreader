@@ -60,8 +60,9 @@ def split_book(src_path: str, encoding: str, out_dir: str) -> Tuple[int, List[di
 
     # Chapter heading patterns
     patterns = [
-        # 第X章、支持中文数字与阿拉伯数字，后面跟任意标题
-        re.compile(r"^((?:第[一二三四五六七八九十百千0-9]+章)[^\n\r]*)$"),
+        # 兼容“第X卷……第Y章……”或直接“第Y章……”
+        # 例：第五卷名震一方第六百四十八章至木灵婴
+        re.compile(r"^(((?:第[一二三四五六七八九十百千0-9]+卷)[^\n\r]*?)?第[一二三四五六七八九十百千0-9]+章[^\n\r]*)$"),
         # XX外传（整行以外传结尾/或仅包含外传）
         re.compile(r"^(.{1,40}?外传)$"),
     ]
@@ -129,19 +130,37 @@ def main():
         {"src": "2.txt", "encoding": "utf-8", "out_dir": "凡人修仙传·仙界篇"},
     ]
 
-    # Allow overriding via CLI: python split_novel.py src encoding out_dir
-    if len(sys.argv) == 4:
-        config = [{"src": sys.argv[1], "encoding": sys.argv[2], "out_dir": sys.argv[3]}]
+    # Simple CLI parsing
+    args = sys.argv[1:]
+    clean = False
+    if args and args[0] == "--clean":
+        clean = True
+        args = args[1:]
+    # Allow overriding via CLI: python split_novel.py [--clean] src encoding out_dir
+    if len(args) == 3:
+        config = [{"src": args[0], "encoding": args[1], "out_dir": args[2]}]
+
+    def purge(out_dir: str):
+        try:
+            for name in os.listdir(out_dir):
+                if name.endswith('.txt') or name == 'manifest.json':
+                    try:
+                        os.remove(os.path.join(out_dir, name))
+                    except Exception:
+                        pass
+        except FileNotFoundError:
+            pass
 
     for item in config:
         src, enc, out_dir = item["src"], item["encoding"], item["out_dir"]
         if not os.path.exists(src):
             print(f"[WARN] Source not found: {src}")
             continue
+        if clean:
+            purge(out_dir)
         count, _ = split_book(src, enc, out_dir)
         print(f"[OK] {out_dir}: {count} chapters written from {src}")
 
 
 if __name__ == "__main__":
     main()
-

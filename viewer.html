@@ -111,6 +111,14 @@
       const last=loadPosition(); const defaultBook= last?.book && state.books[last.book] ? last.book : keys[0]; state.currentBook=defaultBook; bookSelect.value=defaultBook;
       // 初始隐藏用户菜单（仅在需要时检测 API、再显示）
       userMenu.style.display = 'none';
+      // 若运行在 Cloudflare Pages 域名下，自动探测 API 以启用登录
+      const onPages = /\.pages\.dev$/.test(location.hostname);
+      if (onPages) {
+        API_AVAILABLE = await checkApiAvailable();
+        if (API_AVAILABLE) {
+          await refreshUserUI();
+        }
+      }
 
       function updateUserMenu(){ if(!API_AVAILABLE){ userMenu.style.display='none'; return; } userMenu.style.display='flex'; if(state.userName){ menuLogin.style.display='none'; menuLogout.style.display='block'; userBtn.title='账户'; } else { menuLogin.style.display='block'; menuLogout.style.display='none'; userBtn.title='登录/注册'; } }
       async function refreshUserUI(){ if(!API_AVAILABLE){ userMenu.style.display='none'; return false; } const me=await authMe(); if(me&&me.ok&&me.loggedIn){ state.userName=me.username; userBtn.textContent=(state.userName[0]||'?').toUpperCase(); userNameEl.textContent=state.userName; userNameEl.classList.remove('user-anon'); updateUserMenu(); return true; } else { state.userName=null; userBtn.textContent='登'; userNameEl.textContent='未登录'; userNameEl.classList.add('user-anon'); updateUserMenu(); return false; } }

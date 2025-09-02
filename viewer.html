@@ -34,10 +34,6 @@
     .user-name { max-width: 12em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
     .user-anon { color: #888; }
     .user-menu { position: relative; display: flex; align-items: center; gap: 8px; }
-    .dropdown { position: absolute; right: 0; top: calc(100% + 6px); background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.12); padding: 6px; min-width: 160px; display: none; z-index: 1000; }
-    .dropdown.show { display: block; }
-    .dropdown button { width: 100%; text-align: left; background: transparent; border: none; padding: 8px 10px; border-radius: 6px; }
-    .dropdown button:hover { background: #f3f3f3; }
     .card { margin-top: 16px; background: var(--paper); border: 1px solid #e5e3de; border-radius: 10px; overflow: hidden; box-shadow: 0 10px 40px rgba(0,0,0,0.07), inset 0 0 120px rgba(0,0,0,0.03); }
     .title { padding: 18px 24px 0; font-size: 20px; font-weight: 600; letter-spacing: 0.12em; }
     .content { padding: 8px 24px 24px; line-height: 1.9; font-size: var(--content-size); text-align: justify; text-justify: inter-ideograph; white-space: pre-wrap; }
@@ -90,9 +86,11 @@
 
     async function init(){
       const bookSelect=$('book'), chapSelect=$('chapter'), titleEl=$('title'), contentEl=$('content'), noticeEl=$('notice'), fsSelect=$('fs');
-      const userMenu=$('userMenu'), userBtn=$('userBtn'), userNameEl=$('userName'), menu=$('userDropdown'), menuLogin=$('menuLogin'), menuLogout=$('menuLogout');
+      const userMenu=$('userMenu'), userBtn=$('userBtn'), userNameEl=$('userName');
       const modal=$('authModal'), tabLogin=$('tabLogin'), tabRegister=$('tabRegister'), formLogin=$('formLogin'), formRegister=$('formRegister');
       const btnCloseModal=$('btnCloseModal');
+      const menuModal=$('userMenuModal');
+      const menuContent=$('userMenuContent');
       // 强制关闭弹窗，防止某些环境初始状态异常
       if (modal) modal.hidden = true;
 
@@ -120,9 +118,9 @@
         }
       }
 
-      function updateUserMenu(){ if(!API_AVAILABLE){ userMenu.style.display='none'; return; } userMenu.style.display='flex'; if(state.userName){ menuLogin.style.display='none'; menuLogout.style.display='block'; userBtn.title='账户'; } else { menuLogin.style.display='block'; menuLogout.style.display='none'; userBtn.title='登录/注册'; } }
+      function updateUserMenu(){ if(!API_AVAILABLE){ userMenu.style.display='none'; return; } userMenu.style.display='flex'; userBtn.title = state.userName ? '账户' : '登录/注册'; }
       async function refreshUserUI(){ if(!API_AVAILABLE){ userMenu.style.display='none'; return false; } const me=await authMe(); if(me&&me.ok&&me.loggedIn){ state.userName=me.username; userBtn.textContent=(state.userName[0]||'?').toUpperCase(); userNameEl.textContent=state.userName; userNameEl.classList.remove('user-anon'); updateUserMenu(); return true; } else { state.userName=null; userBtn.textContent='登'; userNameEl.textContent='未登录'; userNameEl.classList.add('user-anon'); updateUserMenu(); return false; } }
-      async function ensureApi(){ if(API_AVAILABLE) return true; const ok = await checkApiAvailable(); API_AVAILABLE = !!ok; if(!API_AVAILABLE){ // 离线模式
+      async function ensureApi(){ if(API_AVAILABLE) return true; const ok = await checkApiAvailable(); API_AVAILABLE = !!ok; if(!API_AVAILABLE){
           userMenu.style.display='none';
           return false;
         } else {
@@ -150,11 +148,28 @@
 
       function openModal(which='login'){ if(!API_AVAILABLE){ alert('当前为离线模式，未连接进度服务器'); return; } modal.hidden=false; if(which==='register'){ tabRegister.classList.add('active'); tabLogin.classList.remove('active'); formRegister.hidden=false; formLogin.hidden=true; } else { tabLogin.classList.add('active'); tabRegister.classList.remove('active'); formLogin.hidden=false; formRegister.hidden=true; } }
       function closeModal(){ modal.hidden=true; }
-      async function toggleMenu(){ if(!API_AVAILABLE){ const ok = await ensureApi(); if(!ok) return; } menu.classList.toggle('show'); }
-      userBtn.addEventListener('click', (e)=>{ e.stopPropagation(); toggleMenu(); });
-      document.addEventListener('click', ()=>{ menu.classList.remove('show'); });
-      menuLogin.addEventListener('click', (e)=>{ e.preventDefault(); menu.classList.remove('show'); openModal('login'); });
-      menuLogout.addEventListener('click', async (e)=>{ e.preventDefault(); menu.classList.remove('show'); if(confirm('确认退出登录？')){ await authLogout(); await refreshUserUI(); }});
+      function openUserMenu(){
+        if(!API_AVAILABLE){ alert('当前为离线模式，未连接进度服务器'); return; }
+        // Build menu content
+        menuContent.innerHTML = '';
+        const wrap = document.createElement('div');
+        wrap.style.display='grid'; wrap.style.gap='8px';
+        if(state.userName){
+          const info = document.createElement('div'); info.textContent = '已登录：' + state.userName;
+          const btnOut = document.createElement('button'); btnOut.textContent='退出登录'; btnOut.addEventListener('click', async ()=>{ await authLogout(); closeUserMenu(); await refreshUserUI(); });
+          wrap.appendChild(info); wrap.appendChild(btnOut);
+        } else {
+          const info = document.createElement('div'); info.textContent = '未登录';
+          const btnIn = document.createElement('button'); btnIn.textContent='登录 / 注册…'; btnIn.addEventListener('click', ()=>{ closeUserMenu(); openModal('login'); });
+          wrap.appendChild(info); wrap.appendChild(btnIn);
+        }
+        menuContent.appendChild(wrap);
+        menuModal.hidden = false;
+      }
+      function closeUserMenu(){ menuModal.hidden = true; }
+      userBtn.addEventListener('click', (e)=>{ e.stopPropagation(); openUserMenu(); });
+      menuModal.addEventListener('click', (e)=>{ if(e.target===menuModal) closeUserMenu(); });
+      document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && !menuModal.hidden) closeUserMenu(); });
       tabLogin.addEventListener('click', ()=> openModal('login')); tabRegister.addEventListener('click', ()=> openModal('register')); modal.addEventListener('click', (e)=>{ if(e.target===modal) closeModal(); });
       btnCloseModal.addEventListener('click', closeModal);
       document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && !modal.hidden) { closeModal(); } });
@@ -182,10 +197,6 @@
       <div id="userMenu" class="user-menu user">
         <button id="userBtn" class="user-btn" title="登录/登出">登</button>
         <span id="userName" class="user-name user-anon">未登录</span>
-        <div id="userDropdown" class="dropdown">
-          <button id="menuLogin">登录 / 注册…</button>
-          <button id="menuLogout" style="display:none">退出登录</button>
-        </div>
       </div>
       <button class="nav-btn" id="prev" title="上一章（←）">上一章</button>
       <button class="nav-btn" id="next" title="下一章（→）">下一章</button>
@@ -218,6 +229,15 @@
           <div class="row"><label>密码（≥6位）</label><input id="reg_password" type="password" autocomplete="new-password" /></div>
           <div class="actions"><button type="submit">注册并登录</button></div>
         </form>
+      </div>
+    </div>
+  </div>
+  <!-- User Menu Modal -->
+  <div class="modal-backdrop" id="userMenuModal" hidden>
+    <div class="modal" style="width:320px">
+      <div class="body">
+        <div id="userMenuContent"></div>
+        <div class="actions"><button onclick="document.getElementById('userMenuModal').hidden=true">关闭</button></div>
       </div>
     </div>
   </div>

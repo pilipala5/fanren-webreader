@@ -16,7 +16,7 @@
     html, body { height: 100%; margin: 0; color: var(--ink); background: var(--bg); font-family: "Noto Serif SC", "Songti SC", "SimSun", "STSong", serif; }
     .wide { max-width: 1180px; margin: 0 auto; padding: 8px 16px 0; }
     .page { max-width: 980px; margin: 0 auto; padding: 16px 16px 48px; }
-    header { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border: 1px solid #ddd; background: var(--paper); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.06), inset 0 0 60px rgba(0,0,0,0.03); position: sticky; top: 0; z-index: 10; flex-wrap: nowrap; overflow-x: auto; overflow-y: hidden; }
+    header { display: flex; align-items: center; gap: 8px; padding: 12px 16px; border: 1px solid #ddd; background: var(--paper); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.06), inset 0 0 60px rgba(0,0,0,0.03); position: sticky; top: 0; z-index: 10; flex-wrap: nowrap; overflow-x: auto; overflow-y: visible; }
     h1 { font-weight: 600; font-size: 18px; margin: 0 8px 0 0; letter-spacing: 0.1em; white-space: nowrap; flex: 0 0 auto; }
     select, button, input[type="text"], input[type="password"] { appearance: none; border: 1px solid #cfcfcf; background: #fff; border-radius: 6px; padding: 8px 10px; color: var(--ink); font-size: 14px; }
     label { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
@@ -34,7 +34,7 @@
     .user-name { max-width: 12em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
     .user-anon { color: #888; }
     .user-menu { position: relative; display: flex; align-items: center; gap: 8px; }
-    .dropdown { position: absolute; right: 0; top: calc(100% + 6px); background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.12); padding: 6px; min-width: 160px; display: none; z-index: 20; }
+    .dropdown { position: absolute; right: 0; top: calc(100% + 6px); background: #fff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.12); padding: 6px; min-width: 160px; display: none; z-index: 1000; }
     .dropdown.show { display: block; }
     .dropdown button { width: 100%; text-align: left; background: transparent; border: none; padding: 8px 10px; border-radius: 6px; }
     .dropdown button:hover { background: #f3f3f3; }

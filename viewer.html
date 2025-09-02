@@ -198,8 +198,6 @@
         <button id="userBtn" class="user-btn" title="登录/登出">登</button>
         <span id="userName" class="user-name user-anon">未登录</span>
       </div>
-      <button class="nav-btn" id="prev" title="上一章（←）">上一章</button>
-      <button class="nav-btn" id="next" title="下一章（→）">下一章</button>
     </header>
   </div>
   <div class="page">
@@ -208,6 +206,10 @@
       <div class="title" id="title"></div>
       <div class="content" id="content"></div>
       <div class="footerbar"><span>快捷键：← 上一章 · → 下一章</span></div>
+    </div>
+    <div class="bottom-nav">
+      <button class="nav-btn" id="prev" title="上一章（←）">上一章</button>
+      <button class="nav-btn" id="next" title="下一章（→）">下一章</button>
     </div>
   </div>
   <div class="modal-backdrop" id="authModal" hidden>
@@ -243,3 +245,7 @@
   </div>
 </body>
 </html>
+    /* Bottom navigation for mobile */
+    .bottom-nav { position: sticky; bottom: 0; z-index: 50; background: var(--paper); border: 1px solid #ddd; border-radius: 12px; padding: 10px; margin: 16px 0 0; display: flex; gap: 12px; justify-content: center; align-items: center; box-shadow: 0 -8px 24px rgba(0,0,0,0.06); padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+    .bottom-nav .nav-btn { flex: 1 1 40%; min-width: 120px; font-size: 16px; padding: 12px; }
+    @media (max-width: 560px) { .bottom-nav .nav-btn { font-size: 17px; padding: 14px; } }

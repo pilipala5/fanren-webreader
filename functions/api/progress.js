@@ -11,7 +11,7 @@
  * Bind D1 as "DB" in Pages → Settings → Functions → D1 Bindings.
  */
 
-import { getCookie, verifyToken } from '../../_lib/auth.js';
+import { getCookie, verifyToken } from '../_lib/auth.js';
 
 const cors = (req) => ({
   'Access-Control-Allow-Origin': req.headers.get('Origin') || '*',

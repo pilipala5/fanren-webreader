@@ -1,9 +1,9 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>凡人修仙传 · 阅读器</title>
+  <title>鍑′汉淇粰浼?路 闃呰鍣?/title>
   <style>
     :root {
       --bg: #f5f5f5;
@@ -57,15 +57,15 @@
   </style>
   <script>
     const BOOKS = [
-      { key: '凡人修仙传', manifest: '凡人修仙传/manifest.json' },
-      { key: '凡人修仙传·仙界篇', manifest: '凡人修仙传·仙界篇/manifest.json' },
+      { key: '鍑′汉淇粰浼?, manifest: '鍑′汉淇粰浼?manifest.json' },
+      { key: '鍑′汉淇粰浼犅蜂粰鐣岀瘒', manifest: '鍑′汉淇粰浼犅蜂粰鐣岀瘒/manifest.json' },
     ];
     const FS = { small: 16, medium: 19, large: 22 };
     const state = { books: {}, currentBook: null, currentIndex: 0, cache: new Map(), font: 'medium', userName: null };
-    let API_AVAILABLE = false; // 默认离线，避免首页网络探测造成 404
+    let API_AVAILABLE = false; // 榛樿绂荤嚎锛岄伩鍏嶉椤电綉缁滄帰娴嬮€犳垚 404
 
-    async function fetchJSON(url) { const r = await fetch(url); if (!r.ok) throw new Error('加载失败: ' + url); return await r.json(); }
-    async function fetchText(url) { if (state.cache.has(url)) return state.cache.get(url); const r = await fetch(url); if (!r.ok) throw new Error('加载失败: ' + url); const t = await r.text(); state.cache.set(url, t); return t; }
+    async function fetchJSON(url) { const r = await fetch(url); if (!r.ok) throw new Error('鍔犺浇澶辫触: ' + url); return await r.json(); }
+    async function fetchText(url) { if (state.cache.has(url)) return state.cache.get(url); const r = await fetch(url); if (!r.ok) throw new Error('鍔犺浇澶辫触: ' + url); const t = await r.text(); state.cache.set(url, t); return t; }
     function savePosition(){ try{ localStorage.setItem('novel:last', JSON.stringify({book: state.currentBook, index: state.currentIndex})); }catch{} }
     function loadPosition(){ try{ return JSON.parse(localStorage.getItem('novel:last')||'null')||null; }catch{return null;} }
     function $(id){ return document.getElementById(id); }
@@ -95,26 +95,23 @@
       const btnCloseModal=$('btnCloseModal');
       const menuModal=$('userMenuModal');
       const menuContent=$('userMenuContent');
-      // 强制关闭弹窗，防止某些环境初始状态异常
-      if (modal) modal.hidden = true;
+      // 寮哄埗鍏抽棴寮圭獥锛岄槻姝㈡煇浜涚幆澧冨垵濮嬬姸鎬佸紓甯?      if (modal) modal.hidden = true;
 
       // Populate books
       BOOKS.forEach(b=>{ const o=document.createElement('option'); o.value=b.key; o.textContent=b.key; bookSelect.appendChild(o); });
 
       // Load manifests
       try{ for(const b of BOOKS){ try{ state.books[b.key]=await fetchJSON(b.manifest);}catch(e){ console.warn('manifest fail',b,e);} } }
-      catch{ noticeEl.textContent='提示：若直接双击打开HTML，浏览器可能禁止读取本地文件。建议运行 “python -m http.server 8000” 后，用 http://localhost:8000 打开。'; }
+      catch{ noticeEl.textContent='鎻愮ず锛氳嫢鐩存帴鍙屽嚮鎵撳紑HTML锛屾祻瑙堝櫒鍙兘绂佹璇诲彇鏈湴鏂囦欢銆傚缓璁繍琛?鈥減ython -m http.server 8000鈥?鍚庯紝鐢?http://localhost:8000 鎵撳紑銆?; }
 
-      const keys=Object.keys(state.books); if(keys.length===0){ noticeEl.textContent='未能加载清单文件。'; return; }
+      const keys=Object.keys(state.books); if(keys.length===0){ noticeEl.textContent='鏈兘鍔犺浇娓呭崟鏂囦欢銆?; return; }
 
       try{ const saved=localStorage.getItem('novel:fs'); if(saved&&FS[saved]) state.font=saved; }catch{}
       setContentFont(state.font); fsSelect.value=state.font;
 
       const last=loadPosition(); const defaultBook= last?.book && state.books[last.book] ? last.book : keys[0]; state.currentBook=defaultBook; bookSelect.value=defaultBook;
-      // 初始隐藏用户菜单（仅在需要时检测 API、再显示）
-      userMenu.style.display = 'none';
-      // 若运行在 Cloudflare Pages 域名下，自动探测 API 以启用登录
-      const onPages = /\.pages\.dev$/.test(location.hostname);
+      // 鍒濆闅愯棌鐢ㄦ埛鑿滃崟锛堜粎鍦ㄩ渶瑕佹椂妫€娴?API銆佸啀鏄剧ず锛?      userMenu.style.display = 'none';
+      // 鑻ヨ繍琛屽湪 Cloudflare Pages 鍩熷悕涓嬶紝鑷姩鎺㈡祴 API 浠ュ惎鐢ㄧ櫥褰?      const onPages = /\.pages\.dev$/.test(location.hostname);
       if (onPages) {
         API_AVAILABLE = await checkApiAvailable();
         if (API_AVAILABLE) {
@@ -122,16 +119,8 @@
         }
       }
 
-      // 兼容自定义域名：再做一次 API 探测
-      if (!API_AVAILABLE) {
-        API_AVAILABLE = await checkApiAvailable();
-        if (API_AVAILABLE) {
-          await refreshUserUI();
-        }
-      }
-
-      function updateUserMenu(){ if(!API_AVAILABLE){ userMenu.style.display='none'; return; } userMenu.style.display='flex'; userBtn.title = state.userName ? '账户' : '登录/注册'; }
-      async function refreshUserUI(){ if(!API_AVAILABLE){ userMenu.style.display='none'; return false; } const me=await authMe(); if(me&&me.ok&&me.loggedIn){ state.userName=me.username; userBtn.textContent=(state.userName[0]||'?').toUpperCase(); userNameEl.textContent=state.userName; userNameEl.classList.remove('user-anon'); updateUserMenu(); return true; } else { state.userName=null; userBtn.textContent='登'; userNameEl.textContent='未登录'; userNameEl.classList.add('user-anon'); updateUserMenu(); return false; } }
+      function updateUserMenu(){ if(!API_AVAILABLE){ userMenu.style.display='none'; return; } userMenu.style.display='flex'; userBtn.title = state.userName ? '璐︽埛' : '鐧诲綍/娉ㄥ唽'; }
+      async function refreshUserUI(){ if(!API_AVAILABLE){ userMenu.style.display='none'; return false; } const me=await authMe(); if(me&&me.ok&&me.loggedIn){ state.userName=me.username; userBtn.textContent=(state.userName[0]||'?').toUpperCase(); userNameEl.textContent=state.userName; userNameEl.classList.remove('user-anon'); updateUserMenu(); return true; } else { state.userName=null; userBtn.textContent='鐧?; userNameEl.textContent='鏈櫥褰?; userNameEl.classList.add('user-anon'); updateUserMenu(); return false; } }
       async function ensureApi(){ if(API_AVAILABLE) return true; const ok = await checkApiAvailable(); API_AVAILABLE = !!ok; if(!API_AVAILABLE){
           userMenu.style.display='none';
           return false;
@@ -141,13 +130,12 @@
         }
       }
 
-      function renderChapters(){ chapSelect.innerHTML=''; const m=state.books[state.currentBook]; m.chapters.forEach(c=>{ const o=document.createElement('option'); o.value=String(c.index); o.textContent=String(c.index).padStart(4,'0')+' · '+c.title; chapSelect.appendChild(o); }); }
+      function renderChapters(){ chapSelect.innerHTML=''; const m=state.books[state.currentBook]; m.chapters.forEach(c=>{ const o=document.createElement('option'); o.value=String(c.index); o.textContent=String(c.index).padStart(4,'0')+' 路 '+c.title; chapSelect.appendChild(o); }); }
       function updateButtons(){ const m=state.books[state.currentBook]; const idxs=m.chapters.map(c=>c.index); const min=Math.min.apply(null,idxs); const max=Math.max.apply(null,idxs); $('prev').disabled=state.currentIndex<=min; $('next').disabled=state.currentIndex>=max; }
-      async function loadCurrent(){ const m=state.books[state.currentBook]; const chap=m.chapters.find(x=>x.index===state.currentIndex)||m.chapters[0]; if(!chap) return; chapSelect.value=String(chap.index); titleEl.textContent=chap.title; const url=state.currentBook+'/'+chap.file; try{ const text=await fetchText(url); contentEl.textContent=text; window.scrollTo({top:0,behavior:'instant'}); noticeEl.textContent=''; }catch(e){ contentEl.textContent=''; noticeEl.textContent='无法加载章节。'; } updateButtons(); savePosition(); if(state.userName) apiSaveProgress(state.currentBook,state.currentIndex); }
+      async function loadCurrent(){ const m=state.books[state.currentBook]; const chap=m.chapters.find(x=>x.index===state.currentIndex)||m.chapters[0]; if(!chap) return; chapSelect.value=String(chap.index); titleEl.textContent=chap.title; const url=state.currentBook+'/'+chap.file; try{ const text=await fetchText(url); contentEl.textContent=text; window.scrollTo({top:0,behavior:'instant'}); noticeEl.textContent=''; }catch(e){ contentEl.textContent=''; noticeEl.textContent='鏃犳硶鍔犺浇绔犺妭銆?; } updateButtons(); savePosition(); if(state.userName) apiSaveProgress(state.currentBook,state.currentIndex); }
 
       renderChapters(); state.currentIndex = last?.index ?? (state.books[state.currentBook].chapters[0]?.index || 0);
-      // 初始不探测 API，避免本地静态预览产生 404。仅本地保存进度即可。
-      await loadCurrent();
+      // 鍒濆涓嶆帰娴?API锛岄伩鍏嶆湰鍦伴潤鎬侀瑙堜骇鐢?404銆備粎鏈湴淇濆瓨杩涘害鍗冲彲銆?      await loadCurrent();
 
       bookSelect.addEventListener('change', async ()=>{ state.currentBook=bookSelect.value; renderChapters(); if(API_AVAILABLE && state.userName){ const items=await apiGetProgress(); if(Object.prototype.hasOwnProperty.call(items,state.currentBook)) state.currentIndex=Number(items[state.currentBook]); else state.currentIndex=state.books[state.currentBook].chapters[0]?.index||0; } else { state.currentIndex=state.books[state.currentBook].chapters[0]?.index||0; } await loadCurrent(); });
       chapSelect.addEventListener('change', async ()=>{ state.currentIndex=Number(chapSelect.value); await loadCurrent(); });
@@ -158,21 +146,21 @@
       fsSelect.addEventListener('keydown', (e)=>{ if(e.key==='ArrowLeft'){ e.preventDefault(); gotoPrev(); } else if(e.key==='ArrowRight'){ e.preventDefault(); gotoNext(); } });
       fsSelect.addEventListener('change', ()=> setContentFont(fsSelect.value));
 
-      function openModal(which='login'){ if(!API_AVAILABLE){ alert('当前为离线模式，未连接进度服务器'); return; } modal.hidden=false; if(which==='register'){ tabRegister.classList.add('active'); tabLogin.classList.remove('active'); formRegister.hidden=false; formLogin.hidden=true; } else { tabLogin.classList.add('active'); tabRegister.classList.remove('active'); formLogin.hidden=false; formRegister.hidden=true; } }
+      function openModal(which='login'){ if(!API_AVAILABLE){ alert('褰撳墠涓虹绾挎ā寮忥紝鏈繛鎺ヨ繘搴︽湇鍔″櫒'); return; } modal.hidden=false; if(which==='register'){ tabRegister.classList.add('active'); tabLogin.classList.remove('active'); formRegister.hidden=false; formLogin.hidden=true; } else { tabLogin.classList.add('active'); tabRegister.classList.remove('active'); formLogin.hidden=false; formRegister.hidden=true; } }
       function closeModal(){ modal.hidden=true; }
       function openUserMenu(){
-        if(!API_AVAILABLE){ alert('当前为离线模式，未连接进度服务器'); return; }
+        if(!API_AVAILABLE){ alert('褰撳墠涓虹绾挎ā寮忥紝鏈繛鎺ヨ繘搴︽湇鍔″櫒'); return; }
         // Build menu content
         menuContent.innerHTML = '';
         const wrap = document.createElement('div');
         wrap.style.display='grid'; wrap.style.gap='8px';
         if(state.userName){
-          const info = document.createElement('div'); info.textContent = '已登录：' + state.userName;
-          const btnOut = document.createElement('button'); btnOut.textContent='退出登录'; btnOut.addEventListener('click', async ()=>{ await authLogout(); closeUserMenu(); await refreshUserUI(); });
+          const info = document.createElement('div'); info.textContent = '宸茬櫥褰曪細' + state.userName;
+          const btnOut = document.createElement('button'); btnOut.textContent='閫€鍑虹櫥褰?; btnOut.addEventListener('click', async ()=>{ await authLogout(); closeUserMenu(); await refreshUserUI(); });
           wrap.appendChild(info); wrap.appendChild(btnOut);
         } else {
-          const info = document.createElement('div'); info.textContent = '未登录';
-          const btnIn = document.createElement('button'); btnIn.textContent='登录 / 注册…'; btnIn.addEventListener('click', ()=>{ closeUserMenu(); openModal('login'); });
+          const info = document.createElement('div'); info.textContent = '鏈櫥褰?;
+          const btnIn = document.createElement('button'); btnIn.textContent='鐧诲綍 / 娉ㄥ唽鈥?; btnIn.addEventListener('click', ()=>{ closeUserMenu(); openModal('login'); });
           wrap.appendChild(info); wrap.appendChild(btnIn);
         }
         menuContent.appendChild(wrap);
@@ -185,8 +173,8 @@
       tabLogin.addEventListener('click', ()=> openModal('login')); tabRegister.addEventListener('click', ()=> openModal('register')); modal.addEventListener('click', (e)=>{ if(e.target===modal) closeModal(); });
       btnCloseModal.addEventListener('click', closeModal);
       document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && !modal.hidden) { closeModal(); } });
-      formLogin.addEventListener('submit', async (e)=>{ e.preventDefault(); const u=$('login_username').value.trim(); const p=$('login_password').value; const r=await authLogin(u,p); if(r&&r.ok){ closeModal(); await refreshUserUI(); const items=await apiGetProgress(); if(Object.prototype.hasOwnProperty.call(items,state.currentBook)){ state.currentIndex=Number(items[state.currentBook]); await loadCurrent(); } } else alert(r?.error||'登录失败'); });
-      formRegister.addEventListener('submit', async (e)=>{ e.preventDefault(); const u=$('reg_username').value.trim(); const p=$('reg_password').value; if(!/^[A-Za-z0-9_\-.]{3,32}$/.test(u)){ alert('用户名 3-32 位（字母数字_-.）'); return; } if(p.length<6){ alert('密码至少 6 位'); return; } const r=await authRegister(u,p); if(r&&r.ok){ closeModal(); await refreshUserUI(); } else alert(r?.error||'注册失败'); });
+      formLogin.addEventListener('submit', async (e)=>{ e.preventDefault(); const u=$('login_username').value.trim(); const p=$('login_password').value; const r=await authLogin(u,p); if(r&&r.ok){ closeModal(); await refreshUserUI(); const items=await apiGetProgress(); if(Object.prototype.hasOwnProperty.call(items,state.currentBook)){ state.currentIndex=Number(items[state.currentBook]); await loadCurrent(); } } else alert(r?.error||'鐧诲綍澶辫触'); });
+      formRegister.addEventListener('submit', async (e)=>{ e.preventDefault(); const u=$('reg_username').value.trim(); const p=$('reg_password').value; if(!/^[A-Za-z0-9_\-.]{3,32}$/.test(u)){ alert('鐢ㄦ埛鍚?3-32 浣嶏紙瀛楁瘝鏁板瓧_-.锛?); return; } if(p.length<6){ alert('瀵嗙爜鑷冲皯 6 浣?); return; } const r=await authRegister(u,p); if(r&&r.ok){ closeModal(); await refreshUserUI(); } else alert(r?.error||'娉ㄥ唽澶辫触'); });
     }
 
     window.addEventListener('DOMContentLoaded', init);
@@ -195,20 +183,19 @@
 <body>
   <div class="wide">
     <header>
-      <h1>凡人修仙传 · 阅读器</h1>
-      <label class="label-fixed">书本：<select id="book"></select></label>
-      <label class="label-grow">章节：<select id="chapter"></select></label>
-      <label class="label-fixed">字号：
-        <select id="fs">
-          <option value="small">小</option>
-          <option value="medium">中</option>
-          <option value="large">大</option>
+      <h1>鍑′汉淇粰浼?路 闃呰鍣?/h1>
+      <label class="label-fixed">涔︽湰锛?select id="book"></select></label>
+      <label class="label-grow">绔犺妭锛?select id="chapter"></select></label>
+      <label class="label-fixed">瀛楀彿锛?        <select id="fs">
+          <option value="small">灏?/option>
+          <option value="medium">涓?/option>
+          <option value="large">澶?/option>
         </select>
       </label>
       <div class="spacer"></div>
       <div id="userMenu" class="user-menu user">
-        <button id="userBtn" class="user-btn" title="登录/登出">登</button>
-        <span id="userName" class="user-name user-anon">未登录</span>
+        <button id="userBtn" class="user-btn" title="鐧诲綍/鐧诲嚭">鐧?/button>
+        <span id="userName" class="user-name user-anon">鏈櫥褰?/span>
       </div>
     </header>
   </div>
@@ -217,31 +204,31 @@
     <div class="card">
       <div class="title" id="title"></div>
       <div class="content" id="content"></div>
-      <div class="footerbar"><span>快捷键：← 上一章 · → 下一章</span></div>
+      <div class="footerbar"><span>蹇嵎閿細鈫?涓婁竴绔?路 鈫?涓嬩竴绔?/span></div>
     </div>
     <div class="bottom-nav">
-      <button class="nav-btn" id="prev" title="上一章（←）">上一章</button>
-      <button class="nav-btn" id="next" title="下一章（→）">下一章</button>
+      <button class="nav-btn" id="prev" title="涓婁竴绔狅紙鈫愶級">涓婁竴绔?/button>
+      <button class="nav-btn" id="next" title="涓嬩竴绔狅紙鈫掞級">涓嬩竴绔?/button>
     </div>
   </div>
   <div class="modal-backdrop" id="authModal" hidden>
     <div class="modal">
       <div class="tabs">
-        <button id="tabLogin" class="active">登录</button>
-        <button id="tabRegister">注册</button>
+        <button id="tabLogin" class="active">鐧诲綍</button>
+        <button id="tabRegister">娉ㄥ唽</button>
         <div class="spacer"></div>
-        <button id="btnCloseModal" title="关闭">关闭</button>
+        <button id="btnCloseModal" title="鍏抽棴">鍏抽棴</button>
       </div>
       <div class="body">
         <form id="formLogin" class="panel">
-          <div class="row"><label>用户名</label><input id="login_username" type="text" autocomplete="username" /></div>
-          <div class="row"><label>密码</label><input id="login_password" type="password" autocomplete="current-password" /></div>
-          <div class="actions"><button type="submit">登录</button></div>
+          <div class="row"><label>鐢ㄦ埛鍚?/label><input id="login_username" type="text" autocomplete="username" /></div>
+          <div class="row"><label>瀵嗙爜</label><input id="login_password" type="password" autocomplete="current-password" /></div>
+          <div class="actions"><button type="submit">鐧诲綍</button></div>
         </form>
         <form id="formRegister" class="panel" hidden>
-          <div class="row"><label>用户名（3-32位：字母数字_-.）</label><input id="reg_username" type="text" autocomplete="username" /></div>
-          <div class="row"><label>密码（≥6位）</label><input id="reg_password" type="password" autocomplete="new-password" /></div>
-          <div class="actions"><button type="submit">注册并登录</button></div>
+          <div class="row"><label>鐢ㄦ埛鍚嶏紙3-32浣嶏細瀛楁瘝鏁板瓧_-.锛?/label><input id="reg_username" type="text" autocomplete="username" /></div>
+          <div class="row"><label>瀵嗙爜锛堚墺6浣嶏級</label><input id="reg_password" type="password" autocomplete="new-password" /></div>
+          <div class="actions"><button type="submit">娉ㄥ唽骞剁櫥褰?/button></div>
         </form>
       </div>
     </div>
@@ -251,9 +238,10 @@
     <div class="modal" style="width:320px">
       <div class="body">
         <div id="userMenuContent"></div>
-        <div class="actions"><button onclick="document.getElementById('userMenuModal').hidden=true">关闭</button></div>
+        <div class="actions"><button onclick="document.getElementById('userMenuModal').hidden=true">鍏抽棴</button></div>
       </div>
     </div>
   </div>
 </body>
 </html>
+

@@ -149,6 +149,20 @@
       // 初始不探测 API，避免本地静态预览产生 404。仅本地保存进度即可。
       await loadCurrent();
 
+      // 若已登录，首次渲染后用云端进度覆盖一次，避免必须登出/再登录才能看到最新进度
+      if (API_AVAILABLE && state.userName) {
+        try {
+          const items = await apiGetProgress();
+          if (Object.prototype.hasOwnProperty.call(items, state.currentBook)) {
+            const idx = Number(items[state.currentBook]);
+            if (Number.isFinite(idx) && idx !== state.currentIndex) {
+              state.currentIndex = idx;
+              await loadCurrent();
+            }
+          }
+        } catch {}
+      }
+      
       bookSelect.addEventListener('change', async ()=>{ state.currentBook=bookSelect.value; renderChapters(); if(API_AVAILABLE && state.userName){ const items=await apiGetProgress(); if(Object.prototype.hasOwnProperty.call(items,state.currentBook)) state.currentIndex=Number(items[state.currentBook]); else state.currentIndex=state.books[state.currentBook].chapters[0]?.index||0; } else { state.currentIndex=state.books[state.currentBook].chapters[0]?.index||0; } await loadCurrent(); });
       chapSelect.addEventListener('change', async ()=>{ state.currentIndex=Number(chapSelect.value); await loadCurrent(); });
       async function gotoPrev(){ const m=state.books[state.currentBook]; const idxs=m.chapters.map(c=>c.index); const pos=idxs.indexOf(state.currentIndex); if(pos>0){ state.currentIndex=idxs[pos-1]; await loadCurrent(); } }

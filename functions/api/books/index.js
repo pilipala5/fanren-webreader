@@ -70,8 +70,15 @@ export async function onRequestPost({ request, env }) {
       .prepare('INSERT INTO books(title, uploader, visibility, created_at) VALUES(?,?,?,?)')
       .bind(title, username, visibility, now)
       .run();
-    // D1 returns lastRowId
-    const id = Number(info.lastRowId);
+    // Get inserted id (D1 meta.last_row_id or fallback query)
+    let id = Number(info?.meta?.last_row_id ?? info?.lastRowId);
+    if (!Number.isFinite(id) || id <= 0) {
+      const row = await env.DB.prepare('SELECT last_insert_rowid() AS id').first();
+      id = Number(row?.id);
+    }
+    if (!Number.isFinite(id) || id <= 0) {
+      return json(request, { ok: false, error: 'failed to get new book id' }, { status: 500 });
+    }
     const chapters = Array.isArray(data?.chapters) ? data.chapters : [];
     if (chapters.length) {
       const stmts = [];
@@ -89,4 +96,3 @@ export async function onRequestPost({ request, env }) {
     return json(request, { ok: false, error: String(e) }, { status: 500 });
   }
 }
-

@@ -71,6 +71,34 @@
       el('btnLogout').addEventListener('click', async ()=>{ await authLogout(); state.userName=null; renderAuth(); });
     }
     window.addEventListener('DOMContentLoaded', init);
+
+    // ---- Overrides: cleaner grid and confirmed upload-only flow ----
+    function renderGrid(){
+      const grid = el('bookGrid'); if(!grid) return; grid.innerHTML='';
+      for (const b of BOOKS) {
+        const m = state.books[b.key]; if (!m) continue;
+        const total = (m.chapters||[]).length;
+        const k = b.key;
+        const idx = Number(state.progress[k] || localStorage.getItem('novel:p:'+k) || 0) || 0;
+        grid.appendChild(bookCard({ title: b.key, subtitle: `Chapters: ${total}`, tag: 'builtin', href: 'viewer.html?book='+encodeURIComponent(k), progress: total? Math.round(100*idx/total):0, pos: idx }));
+      }
+      for (const sb of (state.serverBooks||[])) {
+        const k='srv:'+sb.id; const total=sb.chapters||0; const idx=Number(state.progress[k]||localStorage.getItem('novel:p:'+k)||0)||0;
+        grid.appendChild(bookCard({ title: sb.title, subtitle: `Chapters: ${total} · by ${sb.uploader}`, tag: 'server', href: 'viewer.html?srv='+encodeURIComponent(sb.id), progress: total? Math.round(100*idx/total):0, pos: idx }));
+      }
+    }
+
+    function openUpload(){ const u=el('uploads'); if(u) u.innerHTML=''; el('uploadModal').classList.remove('hidden'); }
+    function closeUpload(){ el('uploadModal').classList.add('hidden'); }
+    async function readFileAsText(file){ return new Promise((res,rej)=>{ const fr=new FileReader(); fr.onerror=()=>rej(fr.error||new Error('read fail')); fr.onload=()=>res(String(fr.result||'')); fr.readAsText(file); }); }
+    function splitTxt(text){ const lines=String(text).replace(/\r\n?/g,'\n').split('\n'); const pats=[/^(?:第[一二三四五六七八九十百千0-9]+[卷部集].*?)?第([一二三四五六七八九十百千0-9]+)章[^\n\r]*$/, /^(.{1,40}?外传)$/]; const heads=[]; for(let i=0;i<lines.length;i++){ const s=lines[i].trim(); if(!s) continue; for(const p of pats){ const m=s.match(p); if(m){ const t=m[1]?m[0].replace(/^\s+/,''):s; heads.push([t,i]); break; } } } const out=[]; const push=(i,t,b)=>out.push({index:i,title:t,body:b.join('\n').trimStart()}); if(!heads.length){ push(1,'全文',lines); return out; } const fs=heads[0][1]; if(lines.slice(0,fs).some(x=>x.trim())) push(0,'开篇',lines.slice(0,fs)); for(let i=0;i<heads.length;i++){ const [t,s]=heads[i]; const e=i+1<heads.length? heads[i+1][1] : lines.length; const body=lines.slice(s,e); if(!body.length||body[0].trim()!=t.trim()) body.unshift('',t); push(i+1,t,body);} return out; }
+    async function handleTxt(file){ const text=await readFileAsText(file); const chapters=splitTxt(text); const title=file.name.replace(/\.[^.]+$/,''); addPendingUpload({ title, chapters }); }
+    async function handleEpub(file){ if(!window.JSZip){ alert('JSZip not loaded'); return; } const zip=await JSZip.loadAsync(file); let opf='content.opf'; try{ const c=await zip.file('META-INF/container.xml').async('string'); const dom=new DOMParser().parseFromString(c,'application/xml'); const rf=dom.querySelector('rootfile'); if(rf) opf=rf.getAttribute('full-path')||opf; }catch{} const opfText=await zip.file(opf).async('string'); const o=new DOMParser().parseFromString(opfText,'application/xml'); const man={}; o.querySelectorAll('manifest>item').forEach(i=>{ man[i.getAttribute('id')]=i.getAttribute('href'); }); const spine=Array.from(o.querySelectorAll('spine>itemref')).map(x=>man[x.getAttribute('idref')]).filter(Boolean); const base=opf.split('/').slice(0,-1).join('/'); const texts=[]; for(let i=0;i<spine.length;i++){ const p=(base? base+'/':'')+spine[i]; const f=zip.file(p); if(!f) continue; try{ const html=await f.async('string'); const doc=new DOMParser().parseFromString(html,'text/html'); const h=doc.querySelector('h1,h2,h3,title'); const t=h? (h.textContent||'').trim().slice(0,60) : ('Chapter '+(i+1)); const body=(doc.body? doc.body.innerText : doc.textContent)||''; texts.push({index:i+1,title:t||('Chapter '+(i+1)), body: body.trim()}); }catch{} } const title=file.name.replace(/\.[^.]+$/,''); addPendingUpload({ title, chapters:texts }); }
+    async function handlePdf(file){ if(!window['pdfjsLib']){ alert('PDF.js not loaded'); return; } const arr=new Uint8Array(await file.arrayBuffer()); pdfjsLib.GlobalWorkerOptions.workerSrc=pdfjsLib.GlobalWorkerOptions.workerSrc||'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js'; const pdf=await pdfjsLib.getDocument({data:arr}).promise; const texts=[]; for(let p=1;p<=pdf.numPages;p++){ const page=await pdf.getPage(p); const content=await page.getTextContent(); const s=content.items.map(it=>it.str||'').join(''); texts.push({ index:p, title:'Page '+p, body:s.trim() }); } const title=file.name.replace(/\.[^.]+$/,''); addPendingUpload({ title, chapters:texts }); }
+    async function uploadServer(title, chapters){ if(!API_AVAILABLE){ alert('No server API'); return; } if(!state.userName){ const u=prompt('用户名'); if(!u) return; const p=prompt('密码（≥6位）'); if(!p) return; const r=await authLogin(u,p); if(!r||!r.ok){ alert(r?.error||'登录失败'); return; } state.userName=u; renderAuth(); }
+      const chunk=30; const first=chapters.slice(0,chunk).map(c=>({index:c.index,title:c.title,content:c.body})); const r=await fetch('/api/books',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,chapters:first})}); const j=await r.json(); if(!r.ok||!j.ok) throw new Error(j?.error||('HTTP '+r.status)); const id=j.id; for(let i=chunk;i<chapters.length;i+=chunk){ const part=chapters.slice(i,i+chunk).map(c=>({index:c.index,title:c.title,content:c.body})); const r2=await fetch(`/api/books/${id}/chapters`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chapters:part})}); const j2=await r2.json(); if(!r2.ok||!j2.ok) throw new Error(j2?.error||('HTTP '+r2.status)); } await loadServerBooks(); renderGrid(); return id;
+    }
+    function addPendingUpload({ title, chapters }){ const wrap=el('uploads'); if(!wrap) return; const card=document.createElement('div'); card.className='book-card'; card.innerHTML=`<div class="cover">${escapeHtml(title)}</div><div class="body"><div class="title">${escapeHtml(title)}</div><div class="meta">Parsed · chapters: ${chapters.length}</div><div class="chips"><button class="btn btn-primary" type="button">确认上传</button></div></div>`; const btn=card.querySelector('button'); btn.addEventListener('click', async ()=>{ btn.disabled=true; btn.textContent='上传中...'; try{ await uploadServer(title, chapters); card.remove(); closeUpload(); } catch(e){ alert(e?.message||e); } finally { btn.disabled=false; btn.textContent='确认上传'; } }); wrap.appendChild(card); }
   </script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
@@ -95,8 +123,7 @@
       <div class="hd"><div>上传书籍（TXT / EPUB / PDF）</div><button class="btn" id="closeUpload">关闭</button></div>
       <div class="bd">
         <input id="file" type="file" multiple accept=".txt,.epub,.pdf,application/epub+zip,application/pdf,text/plain" />
-        <label class="inline"><input id="serverUpload" type="checkbox" /> 保存到服务器（公开可见）</label>
-        <div class="small">不勾选：仅本次会话内可读（关闭页面需重新上传）。勾选：解析后将章节文本保存到服务器数据库，其他访客可在“公共书库”看到并阅读。</div>
+        <div class="small">选择文件后会解析章节，请点击下面卡片中的“确认上传”开始保存到服务器。</div>
         <div id="uploads" class="grid"></div>
       </div>
     </div>

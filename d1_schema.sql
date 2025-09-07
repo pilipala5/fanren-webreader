@@ -34,3 +34,11 @@ CREATE TABLE IF NOT EXISTS chapters (
 );
 
 CREATE INDEX IF NOT EXISTS idx_chapters_book ON chapters(book_id);
+
+-- Manual favorites per user (book key uses same namespace as progress: builtin title or 'srv:<id>')
+CREATE TABLE IF NOT EXISTS favorites (
+  username TEXT NOT NULL,
+  book TEXT NOT NULL,
+  created_at REAL NOT NULL,
+  PRIMARY KEY (username, book)
+);

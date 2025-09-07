@@ -95,11 +95,41 @@
       const btnCloseModal=$('btnCloseModal');
       const menuModal=$('userMenuModal');
       const menuContent=$('userMenuContent');
+      const params = new URLSearchParams(location.search);
+      const paramBook = params.get('book');
+      const uploadId = params.get('upload');
+      const srvId = params.get('srv');
       // 强制关闭弹窗，防止某些环境初始状态异常
       if (modal) modal.hidden = true;
 
       // Populate books
       BOOKS.forEach(b=>{ const o=document.createElement('option'); o.value=b.key; o.textContent=b.key; bookSelect.appendChild(o); });
+      let uploadKey = null;
+      if (uploadId) {
+        try {
+          const mani = JSON.parse(sessionStorage.getItem('upload:'+uploadId+':manifest')||'null');
+          if (mani && Array.isArray(mani.chapters)) {
+            uploadKey = 'upload:'+uploadId;
+            state.books[uploadKey] = { book: mani.title || ('上传书籍 '+uploadId), chapters: mani.chapters };
+            const o=document.createElement('option'); o.value=uploadKey; o.textContent=(mani.title||('上传书籍 '+uploadId))+'（上传）'; bookSelect.appendChild(o);
+          }
+        } catch {}
+      }
+      // Add server (public) book if requested
+      let srvKey = null;
+      if (srvId) {
+        try {
+          const r = await fetch(`/api/books/${encodeURIComponent(srvId)}`);
+          if (r.ok) {
+            const j = await r.json();
+            if (j && j.ok && j.book && Array.isArray(j.chapters)) {
+              srvKey = 'srv:' + String(j.book.id || srvId);
+              state.books[srvKey] = { book: j.book.title, chapters: j.chapters };
+              const o = document.createElement('option'); o.value=srvKey; o.textContent = (j.book.title||('服务器书籍 '+srvId))+'（服务器）'; bookSelect.appendChild(o);
+            }
+          }
+        } catch {}
+      }
 
       // Load manifests
       try{ for(const b of BOOKS){ try{ state.books[b.key]=await fetchJSON(b.manifest);}catch(e){ console.warn('manifest fail',b,e);} } }
@@ -110,7 +140,15 @@
       try{ const saved=localStorage.getItem('novel:fs'); if(saved&&FS[saved]) state.font=saved; }catch{}
       setContentFont(state.font); fsSelect.value=state.font;
 
-      const last=loadPosition(); const defaultBook= last?.book && state.books[last.book] ? last.book : keys[0]; state.currentBook=defaultBook; bookSelect.value=defaultBook;
+      const last=loadPosition();
+      let defaultBook = keys[0];
+      if (uploadKey) defaultBook = uploadKey;
+      if (srvKey) defaultBook = srvKey;
+      if (paramBook && state.books[paramBook]) defaultBook = paramBook; else if (last?.book && state.books[last.book]) defaultBook = last.book;
+      state.currentBook=defaultBook; bookSelect.value=defaultBook;
+      if (uploadId && !uploadKey) { try{ noticeEl.textContent='未找到上传数据，请返回首页重新上传'; }catch{} }
+      try{ document.title='灵阅书屋 · 阅读器'; }catch{}
+      try{ const h1=document.querySelector('header h1'); if(h1){ h1.textContent='灵阅书屋'; const a=document.createElement('a'); a.href='/'; a.textContent='返回首页'; a.className='user-btn'; h1.insertAdjacentElement('afterend', a);} }catch{}
       // 初始隐藏用户菜单（仅在需要时检测 API、再显示）
       userMenu.style.display = 'none';
       // 若运行在 Cloudflare Pages 域名下，自动探测 API 以启用登录
@@ -143,7 +181,35 @@
 
       function renderChapters(){ chapSelect.innerHTML=''; const m=state.books[state.currentBook]; m.chapters.forEach(c=>{ const o=document.createElement('option'); o.value=String(c.index); o.textContent=String(c.index).padStart(4,'0')+' · '+c.title; chapSelect.appendChild(o); }); }
       function updateButtons(){ const m=state.books[state.currentBook]; const idxs=m.chapters.map(c=>c.index); const min=Math.min.apply(null,idxs); const max=Math.max.apply(null,idxs); $('prev').disabled=state.currentIndex<=min; $('next').disabled=state.currentIndex>=max; }
-      async function loadCurrent(){ const m=state.books[state.currentBook]; const chap=m.chapters.find(x=>x.index===state.currentIndex)||m.chapters[0]; if(!chap) return; chapSelect.value=String(chap.index); titleEl.textContent=chap.title; const url=state.currentBook+'/'+chap.file; try{ const text=await fetchText(url); contentEl.textContent=text; window.scrollTo({top:0,behavior:'instant'}); noticeEl.textContent=''; }catch(e){ contentEl.textContent=''; noticeEl.textContent='无法加载章节。'; } updateButtons(); savePosition(); if(state.userName) apiSaveProgress(state.currentBook,state.currentIndex); }
+      async function loadCurrent(){
+        const m=state.books[state.currentBook];
+        const chap=m?.chapters?.find(x=>x.index===state.currentIndex)||m?.chapters?.[0];
+        if(!chap) return;
+        chapSelect.value=String(chap.index);
+        titleEl.textContent=chap.title;
+        try{
+          let text='';
+          if(chap.file){
+            const url=state.currentBook+'/'+chap.file;
+            text = await fetchText(url);
+          } else if (state.currentBook && state.currentBook.startsWith('upload:')){
+            const id = state.currentBook.slice('upload:'.length);
+            text = sessionStorage.getItem('upload:'+id+':ch:'+chap.index) || '';
+          } else if (state.currentBook && state.currentBook.startsWith('srv:')) {
+            const id = state.currentBook.slice('srv:'.length);
+            const r = await fetch(`/api/books/${encodeURIComponent(id)}/chapter/${encodeURIComponent(chap.index)}`);
+            if (!r.ok) throw new Error('加载失败');
+            text = await r.text();
+          }
+          contentEl.textContent=text;
+          window.scrollTo({top:0,behavior:'instant'});
+          noticeEl.textContent='';
+        }catch(e){ contentEl.textContent=''; noticeEl.textContent='无法加载章节。'; }
+        updateButtons();
+        savePosition();
+        try{ localStorage.setItem('novel:p:'+state.currentBook, String(state.currentIndex)); }catch{}
+        if(state.userName) apiSaveProgress(state.currentBook,state.currentIndex);
+      }
 
       renderChapters(); state.currentIndex = last?.index ?? (state.books[state.currentBook].chapters[0]?.index || 0);
       // 初始不探测 API，避免本地静态预览产生 404。仅本地保存进度即可。
@@ -163,7 +229,7 @@
         } catch {}
       }
       
-      bookSelect.addEventListener('change', async ()=>{ state.currentBook=bookSelect.value; renderChapters(); if(API_AVAILABLE && state.userName){ const items=await apiGetProgress(); if(Object.prototype.hasOwnProperty.call(items,state.currentBook)) state.currentIndex=Number(items[state.currentBook]); else state.currentIndex=state.books[state.currentBook].chapters[0]?.index||0; } else { state.currentIndex=state.books[state.currentBook].chapters[0]?.index||0; } await loadCurrent(); });
+      bookSelect.addEventListener('change', async ()=>{ state.currentBook=bookSelect.value; renderChapters(); if(API_AVAILABLE && state.userName){ const items=await apiGetProgress(); if(Object.prototype.hasOwnProperty.call(items,state.currentBook)) state.currentIndex=Number(items[state.currentBook]); else { const local = Number.parseInt(localStorage.getItem('novel:p:'+state.currentBook)||'NaN',10); if(!Number.isNaN(local)) state.currentIndex=local; else state.currentIndex=state.books[state.currentBook].chapters[0]?.index||0; } } else { const local = Number.parseInt(localStorage.getItem('novel:p:'+state.currentBook)||'NaN',10); if(!Number.isNaN(local)) state.currentIndex=local; else state.currentIndex=state.books[state.currentBook].chapters[0]?.index||0; } await loadCurrent(); });
       chapSelect.addEventListener('change', async ()=>{ state.currentIndex=Number(chapSelect.value); await loadCurrent(); });
       async function gotoPrev(){ const m=state.books[state.currentBook]; const idxs=m.chapters.map(c=>c.index); const pos=idxs.indexOf(state.currentIndex); if(pos>0){ state.currentIndex=idxs[pos-1]; await loadCurrent(); } }
       async function gotoNext(){ const m=state.books[state.currentBook]; const idxs=m.chapters.map(c=>c.index); const pos=idxs.indexOf(state.currentIndex); if(pos>=0&&pos<idxs.length-1){ state.currentIndex=idxs[pos+1]; await loadCurrent(); } }

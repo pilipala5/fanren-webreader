@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>灵阅书屋 · 首页</title>
+  <style>
+    :root { --bg:#f5f5f5; --ink:#1f1f1f; --ink-2:#2b2b2b; --accent:#6c757d; --paper:#ffffff; }
+    html,body{height:100%;margin:0;color:var(--ink);background:var(--bg);font-family:"Noto Serif SC","Songti SC","SimSun","STSong",serif}
+    .wide{max-width:1180px;margin:0 auto;padding:8px 16px 0}
+    header{display:flex;align-items:center;gap:8px;padding:12px 16px;border:1px solid #ddd;background:var(--paper);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.06),inset 0 0 60px rgba(0,0,0,.03);position:sticky;top:0;z-index:10}
+    h1{font-weight:600;font-size:18px;margin:0 8px 0 0;letter-spacing:.1em;white-space:nowrap}
+    .spacer{flex:1}
+    .page{max-width:980px;margin:0 auto;padding:16px 16px 48px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+    .card{background:var(--paper);border:1px solid #e5e3de;border-radius:10px;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.07),inset 0 0 120px rgba(0,0,0,.03)}
+    .card .hd{padding:14px 16px;font-weight:600;border-bottom:1px solid #eee;letter-spacing:.08em}
+    .card .bd{padding:12px 16px;display:grid;gap:10px}
+    .book{display:grid;gap:6px}
+    .book .t{font-weight:600}
+    .row{display:flex;align-items:center;gap:8px}
+    .muted{color:#666;font-size:13px}
+    .btn{appearance:none;border:1px solid #cfcfcf;background:#fff;border-radius:6px;padding:8px 10px;color:var(--ink);font-size:14px;cursor:pointer}
+    .btn[disabled]{opacity:.5;cursor:not-allowed}
+    .progress{height:8px;background:#f0f0f0;border-radius:999px;overflow:hidden}
+    .progress>i{display:block;height:100%;background:#7d9fff;width:0%}
+    input[type="file"]{display:block}
+    .tips{color:#8c6b3b;background:#fff8e6;border:1px dashed #d7c4a0;padding:8px 12px;border-radius:6px}
+    a{color:#0b5ed7;text-decoration:none}
+  </style>
+  <script>
+    const BOOKS = [
+      { key: '凡人修仙传', manifest: '凡人修仙传/manifest.json' },
+      { key: '凡人修仙传·仙界篇', manifest: '凡人修仙传·仙界篇/manifest.json' },
+    ];
+    let API_AVAILABLE = false;
+    const state = { books: {}, progress: {}, userName: null, serverBooks: [] };
+
+    async function pingAPI(){
+      const ctrl = new AbortController();
+      setTimeout(()=>ctrl.abort(), 600);
+      try{ const r = await fetch('/api/health',{signal:ctrl.signal}); API_AVAILABLE = r.ok; }catch{ API_AVAILABLE = false; }
+    }
+    async function fetchJSON(url){ const r=await fetch(url); if(!r.ok) throw 0; return await r.json(); }
+    async function authMe(){ if(!API_AVAILABLE) return null; try{ const r=await fetch('/api/auth/me'); if(!r.ok) return null; return await r.json(); }catch{return null;} }
+    async function authLogin(username,password){ if(!API_AVAILABLE) return { ok:false, error:'api disabled' }; const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})}); return await r.json(); }
+    async function authLogout(){ if(!API_AVAILABLE) return; try{ await fetch('/api/auth/logout',{method:'POST'}); }catch{} }
+    async function loadBuiltins(){
+      for(const b of BOOKS){
+        try{ state.books[b.key] = await fetchJSON(b.manifest); }catch{}
+      }
+    }
+    async function loadProgress(){
+      if(API_AVAILABLE){
+        try{ const r=await fetch('/api/progress'); if(r.ok){ const j=await r.json(); if(j.ok) state.progress = j.items||{}; }}catch{}
+      }
+      for(const k of Object.keys(state.books)){
+        if(!(k in state.progress)){
+          try{ const v = localStorage.getItem('novel:p:'+k); if(v!=null) state.progress[k]=Number(v)||0; }catch{}
+        }
+      }
+    }
+    async function loadServerBooks(){ if(!API_AVAILABLE) return; try{ const r=await fetch('/api/books'); if(!r.ok) return; const j=await r.json(); if(j&&j.ok){ state.serverBooks=j.items||[]; renderServerBooks(); } }catch{} }
+    function el(id){ return document.getElementById(id); }
+    function pct(idx, total){ if(!total) return 0; const p=Math.max(0,Math.min(100, Math.round(100*idx/total))); return p; }
+    function render(){
+      const list = el('list'); list.innerHTML='';
+      for(const k of Object.keys(state.books)){
+        const m = state.books[k]; const total = (m?.chapters||[]).length; const idx = Number(state.progress[k]||0);
+        const item = document.createElement('div'); item.className='book';
+        const t = document.createElement('div'); t.className='t'; t.textContent = k;
+        const meta = document.createElement('div'); meta.className='muted'; meta.textContent = total? (`章节数：${total}`):'清单加载失败';
+        const pr = document.createElement('div'); pr.className='progress'; const bar=document.createElement('i'); bar.style.width = pct(idx,total)+'%'; pr.appendChild(bar);
+        const row = document.createElement('div'); row.className='row';
+        const btn = document.createElement('a'); btn.className='btn'; btn.textContent = idx? '继续阅读' : '开始阅读'; btn.href = 'viewer.html?book='+encodeURIComponent(k);
+        const pos = document.createElement('div'); pos.className='muted'; pos.textContent = idx? `已读至第 ${idx} 章` : '未开始';
+        row.appendChild(btn); row.appendChild(pos);
+        item.appendChild(t); item.appendChild(meta); item.appendChild(pr); item.appendChild(row);
+        list.appendChild(item);
+      }
+    }
+
+    // Upload handling (session-scoped storage)
+    function putSess(key, val){ try{ sessionStorage.setItem(key, typeof val==='string'?val:JSON.stringify(val)); }catch(e){ alert('存储空间不足，无法保存上传书籍'); throw e; } }
+    function sanitizeTitle(name){ return String(name||'我的书籍').replace(/[\u0000-\u001F]/g,'').slice(0,120); }
+    async function readFileAsText(file){ return new Promise((res,rej)=>{ const fr = new FileReader(); fr.onerror = ()=>rej(fr.error||new Error('读取失败')); fr.onload = ()=>res(String(fr.result||'')); fr.readAsText(file); }); }
+    function splitTxtToChapters(text){
+      const lines = String(text).replace(/\r\n?/g,'\n').split('\n');
+      const pats = [ /^(?:第[一二三四五六七八九十百千0-9]+[卷部集].*?)?第([一二三四五六七八九十百千0-9]+)章[^\n\r]*$/, /^(.{1,40}?外传)$/ ];
+      const heads = [];
+      for(let i=0;i<lines.length;i++){
+        const s = lines[i].trim(); if(!s) continue;
+        for(const pat of pats){ const m=s.match(pat); if(m){ const title=m[1]?m[0].replace(/^\s+/,''):s; heads.push([title,i]); break; } }
+      }
+      const chapters=[]; const push=(index,title,body)=>chapters.push({index,title,body:body.join('\n').trimStart()});
+      if(!heads.length){ push(1,'全文',lines); return chapters; }
+      const [,fs] = heads[0]; if(lines.slice(0,fs).some(x=>x.trim())) push(0,'开篇',lines.slice(0,fs));
+      for(let i=0;i<heads.length;i++){
+        const [t,s] = heads[i]; const e = i+1<heads.length? heads[i+1][1] : lines.length; const body = lines.slice(s,e);
+        if(!body.length || body[0].trim()!=t.trim()) body.unshift('',t);
+        push((i+1), t, body);
+      }
+      return chapters;
+    }
+
+    async function handleTxt(file){
+      const text = await readFileAsText(file);
+      const chapters = splitTxtToChapters(text);
+      const id = 'u:'+Date.now()+':'+Math.random().toString(36).slice(2);
+      const title = sanitizeTitle(file.name.replace(/\.[^.]+$/,''));
+      const manifest = { id, title, type:'txt', chapters: chapters.map(c=>({index:c.index,title:c.title})) };
+      putSess('upload:'+id+':manifest', manifest);
+      for(const ch of chapters){ putSess('upload:'+id+':ch:'+ch.index, ch.body); }
+      addUploadedUI({ id, title, count: chapters.length });
+      if (document.getElementById('serverUpload') && document.getElementById('serverUpload').checked) { await tryUploadToServer(title, chapters); }
+    }
+
+    async function handleEpub(file){
+      if(!window.JSZip){ alert('JSZip 未加载，无法解析 EPUB'); return; }
+      const zip = await JSZip.loadAsync(file);
+      let opfPath = 'content.opf';
+      try{ const container = await zip.file('META-INF/container.xml').async('string'); const dom = new DOMParser().parseFromString(container,'application/xml'); const rootfile = dom.querySelector('rootfile'); if(rootfile){ opfPath = rootfile.getAttribute('full-path')||opfPath; } }catch{}
+      const opfText = await zip.file(opfPath).async('string');
+      const opf = new DOMParser().parseFromString(opfText,'application/xml');
+      const manifest = {}; opf.querySelectorAll('manifest > item').forEach(it=>{ manifest[it.getAttribute('id')] = it.getAttribute('href'); });
+      const spine = Array.from(opf.querySelectorAll('spine > itemref')).map(x=>manifest[x.getAttribute('idref')]).filter(Boolean);
+      const base = opfPath.split('/').slice(0,-1).join('/');
+      const texts = [];
+      for(let i=0;i<spine.length;i++){
+        const p = (base? base + '/':'') + spine[i];
+        const f = zip.file(p); if(!f) continue;
+        try{
+          const html = await f.async('string');
+          const doc = new DOMParser().parseFromString(html,'text/html');
+          const h = doc.querySelector('h1,h2,h3,title');
+          const title = h? (h.textContent||'').trim().slice(0,60) : ('章节 '+(i+1));
+          const body = (doc.body? doc.body.innerText : doc.textContent)||'';
+          texts.push({ index: i+1, title: title||('章节 '+(i+1)), body: body.trim() });
+        }catch{}
+      }
+      const id = 'u:'+Date.now()+':'+Math.random().toString(36).slice(2);
+      const title = sanitizeTitle(file.name.replace(/\.[^.]+$/,''));
+      const mani = { id, title, type:'epub', chapters: texts.map(c=>({index:c.index,title:c.title})) };
+      putSess('upload:'+id+':manifest', mani);
+      for(const ch of texts){ putSess('upload:'+id+':ch:'+ch.index, ch.body); }
+      addUploadedUI({ id, title, count: texts.length });
+      if (document.getElementById('serverUpload') && document.getElementById('serverUpload').checked) { await tryUploadToServer(title, texts); }
+    }
+
+    async function handlePdf(file){
+      if(!window['pdfjsLib']){ alert('PDF.js 未加载，无法解析 PDF'); return; }
+      const arr = new Uint8Array(await file.arrayBuffer());
+      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfjsLib.GlobalWorkerOptions.workerSrc || 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+      const pdf = await pdfjsLib.getDocument({data:arr}).promise;
+      const texts = [];
+      for(let p=1;p<=pdf.numPages;p++){
+        const page = await pdf.getPage(p);
+        const content = await page.getTextContent();
+        const s = content.items.map(it=>it.str||'').join('');
+        texts.push({ index: p, title: '第 '+p+' 页', body: s.trim() });
+      }
+      const id = 'u:'+Date.now()+':'+Math.random().toString(36).slice(2);
+      const title = sanitizeTitle(file.name.replace(/\.[^.]+$/,''));
+      const mani = { id, title, type:'pdf', chapters: texts.map(c=>({index:c.index,title:c.title})) };
+      putSess('upload:'+id+':manifest', mani);
+      for(const ch of texts){ putSess('upload:'+id+':ch:'+ch.index, ch.body); }
+      addUploadedUI({ id, title, count: texts.length });
+      if (document.getElementById('serverUpload') && document.getElementById('serverUpload').checked) { await tryUploadToServer(title, texts); }
+    }
+
+    function addUploadedUI(info){
+      const wrap = document.getElementById('uploads');
+      const item = document.createElement('div'); item.className='book';
+      const t = document.createElement('div'); t.className='t'; t.textContent = info.title;
+      const meta = document.createElement('div'); meta.className='muted'; meta.textContent = `本次会话可读 · 章节数：${info.count}`;
+      const row = document.createElement('div'); row.className='row';
+      const a = document.createElement('a'); a.className='btn'; a.textContent='开始阅读'; a.href = 'viewer.html?upload='+encodeURIComponent(info.id);
+      row.appendChild(a);
+      item.appendChild(t); item.appendChild(meta); item.appendChild(row);
+      wrap.appendChild(item);
+    }
+
+    function serverKey(id){ return 'srv:'+id; }
+    function renderServerBooks(){ const wrap = el('serverList'); if(!wrap) return; wrap.innerHTML=''; for(const b of (state.serverBooks||[])){ const k=serverKey(b.id); const total=b.chapters||0; let idx=0; if(state.progress[k]!=null) idx=Number(state.progress[k]||0); else { try{ const v=localStorage.getItem('novel:p:'+k); if(v!=null) idx=Number(v)||0; }catch{} } const item=document.createElement('div'); item.className='book'; const t=document.createElement('div'); t.className='t'; t.textContent=b.title; const meta=document.createElement('div'); meta.className='muted'; meta.textContent=`章节数：${total} · 上传者：${b.uploader}`; const pr=document.createElement('div'); pr.className='progress'; const bar=document.createElement('i'); bar.style.width=(total? Math.round(100*idx/total):0)+'%'; pr.appendChild(bar); const row=document.createElement('div'); row.className='row'; const a=document.createElement('a'); a.className='btn'; a.textContent= idx? '继续阅读':'开始阅读'; a.href='viewer.html?srv='+encodeURIComponent(b.id); const pos=document.createElement('div'); pos.className='muted'; pos.textContent= idx? `已读至第 ${idx} 章` : '未开始'; row.appendChild(a); row.appendChild(pos); item.appendChild(t); item.appendChild(meta); item.appendChild(pr); item.appendChild(row); wrap.appendChild(item);} }
+
+    async function tryUploadToServer(title, chapters){ if(!API_AVAILABLE){ alert('未连接服务器，无法上传到服务器'); return; } if(!state.userName){ const ok=await ensureLogin(); if(!ok){ alert('请先登录再上传到服务器'); return; } } try{ const chunkSize=30; const first=chapters.slice(0,chunkSize).map(c=>({index:c.index,title:c.title,content:c.body})); const r=await fetch('/api/books',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,chapters:first})}); const j=await r.json(); if(!r.ok||!j.ok) throw new Error(j?.error||('HTTP '+r.status)); const id=j.id; for(let i=chunkSize;i<chapters.length;i+=chunkSize){ const part=chapters.slice(i,i+chunkSize).map(c=>({index:c.index,title:c.title,content:c.body})); const r2=await fetch(`/api/books/${id}/chapters`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chapters:part})}); const j2=await r2.json(); if(!r2.ok||!j2.ok) throw new Error(j2?.error||('HTTP '+r2.status)); } alert('已上传到服务器：'+title); await loadServerBooks(); }catch(e){ console.error(e); alert('上传失败：'+(e?.message||e)); } }
+
+    async function ensureLogin(){ if(!API_AVAILABLE) return false; const me=await authMe(); if(me&&me.ok&&me.loggedIn){ state.userName=me.username; renderAuth(); return true; } const u=prompt('请输入用户名（3-32位，字母数字_-.）'); if(!u) return false; const p=prompt('请输入密码（至少6位）'); if(!p) return false; const r=await authLogin(u,p); if(r&&r.ok){ state.userName=u; renderAuth(); return true; } alert(r?.error||'登录失败'); return false; }
+    function renderAuth(){ const elUser = el('userName'); const btnLogin = el('btnLogin'); const btnLogout = el('btnLogout'); if(!elUser||!btnLogin||!btnLogout) return; if(state.userName){ elUser.textContent=state.userName; btnLogin.style.display='none'; btnLogout.style.display='inline-block'; } else { elUser.textContent='未登录'; btnLogin.style.display='inline-block'; btnLogout.style.display='none'; } }
+
+    async function onUpload(ev){
+      const files = Array.from(ev.target.files||[]);
+      for(const f of files){
+        const ext = (f.name.split('.').pop()||'').toLowerCase();
+        try{
+          if(ext==='txt') await handleTxt(f);
+          else if(ext==='epub') await handleEpub(f);
+          else if(ext==='pdf') await handlePdf(f);
+          else alert('暂不支持：'+ext);
+        }catch(e){ console.error(e); alert('解析失败：'+f.name); }
+      }
+      ev.target.value='';
+    }
+
+    async function init(){
+      await pingAPI();
+      if(API_AVAILABLE){ const me = await authMe(); if(me&&me.ok&&me.loggedIn){ state.userName=me.username; } }
+      renderAuth();
+      await loadBuiltins();
+      await loadProgress();
+      await loadServerBooks();
+      render();
+      document.getElementById('file').addEventListener('change', onUpload);
+      document.getElementById('btnLogin').addEventListener('click', ensureLogin);
+      document.getElementById('btnLogout').addEventListener('click', async ()=>{ await authLogout(); state.userName=null; renderAuth(); });
+    }
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+</head>
+<body>
+  <div class="wide">
+    <header>
+      <h1>灵阅书屋</h1>
+      <div class="spacer"></div>
+      <span class="muted">账户：</span><strong id="userName" class="muted">未登录</strong>
+      <button class="btn" id="btnLogin">登录/注册</button>
+      <button class="btn" id="btnLogout" style="display:none">退出</button>
+      <a class="btn" href="viewer.html" style="margin-left:8px">直接进入阅读器</a>
+    </header>
+  </div>
+  <div class="page">
+    <div class="grid">
+      <div class="card">
+        <div class="hd">我的书架（内置）</div>
+        <div class="bd" id="list"></div>
+      </div>
+      <div class="card">
+        <div class="hd">公共书库（服务器）</div>
+        <div class="bd" id="serverList"></div>
+      </div>
+      <div class="card">
+        <div class="hd">上传书籍（TXT / EPUB / PDF）</div>
+        <div class="bd">
+          <input id="file" type="file" multiple accept=".txt,.epub,.pdf,application/epub+zip,application/pdf,text/plain" />
+          <label class="row"><input id="serverUpload" type="checkbox" /> 保存到服务器（公开可见）</label>
+          <div class="tips">不勾选：仅本次会话内可读（关闭页面需重新上传）。勾选：解析后将章节文本保存到服务器数据库，其他访客可在“公共书库”看到并阅读。</div>
+          <div class="book" id="uploads"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
+

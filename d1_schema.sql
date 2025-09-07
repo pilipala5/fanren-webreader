@@ -14,3 +14,23 @@ CREATE TABLE IF NOT EXISTS users (
   salt TEXT NOT NULL,
   created_at REAL NOT NULL
 );
+
+-- Books library
+CREATE TABLE IF NOT EXISTS books (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  title TEXT NOT NULL,
+  uploader TEXT NOT NULL,
+  visibility TEXT NOT NULL DEFAULT 'public',
+  created_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS chapters (
+  book_id INTEGER NOT NULL,
+  idx INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  PRIMARY KEY (book_id, idx),
+  FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_chapters_book ON chapters(book_id);

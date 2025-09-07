@@ -23,6 +23,7 @@
       userName: null,
       cache: new Map(),
       manifests: {},
+      encoding: 'utf-8',
     };
 
     function el(id){ return document.getElementById(id); }
@@ -33,7 +34,16 @@
     function saveProgress(){ try{ localStorage.setItem('novel:p:'+state.bookKey, String(state.currentIndex)); }catch{} }
     async function saveProgressServer(){ if(!state.api || !state.userName) return; try{ await fetch('/api/progress',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({book: state.bookKey, index: state.currentIndex})}); }catch{} }
     async function fetchJSON(url){ const r=await fetch(url); if(!r.ok) throw new Error('加载失败 '+url); return await r.json(); }
-    async function fetchText(url){ if(state.cache.has(url)) return state.cache.get(url); const r=await fetch(url); if(!r.ok) throw new Error('加载失败 '+url); const t=await r.text(); state.cache.set(url,t); return t; }
+    async function fetchText(url, encoding='utf-8'){
+      // 对非 UTF-8 文本用 TextDecoder 解码
+      const enc = String(encoding||'utf-8').toLowerCase();
+      if(enc==='utf-8' || enc==='utf8'){ const r=await fetch(url); if(!r.ok) throw new Error('加载失败 '+url); return await r.text(); }
+      const r = await fetch(url); if(!r.ok) throw new Error('加载失败 '+url);
+      const buf = await r.arrayBuffer();
+      const mapped = (enc==='gb2312'||enc==='gbk')? 'gb18030' : enc;
+      const dec = new TextDecoder(mapped, { fatal:false });
+      return dec.decode(buf);
+    }
 
     async function loadBuiltinsManifests(){ for(const b of BUILTINS){ try{ state.manifests[b.key]=await fetchJSON(b.manifest); }catch{} } }
 
@@ -53,7 +63,9 @@
 
     async function loadChapters(){
       if(state.mode==='builtin'){
-        const m = state.manifests[state.bookKey] || await fetchJSON((BUILTINS.find(b=>b.key===state.bookKey)||{}).manifest);
+        const mf = BUILTINS.find(b=>b.key===state.bookKey);
+        const m = state.manifests[state.bookKey] || (mf? await fetchJSON(mf.manifest) : null);
+        state.encoding = (m&&m.encoding)||'utf-8';
         state.chapters = Array.isArray(m?.chapters)? m.chapters.map(c=>({ index:c.index, title:c.title, file:c.file })) : [];
         state.currentIndex = state.currentIndex || (state.chapters[0]?.index || 0);
       } else if (state.mode==='server') {
@@ -73,7 +85,20 @@
     function renderChapters(){ const sel=el('chapter'); sel.innerHTML=''; for(const c of state.chapters){ const o=document.createElement('option'); o.value=String(c.index); o.textContent=String(c.index).padStart(4,'0')+' · '+c.title; sel.appendChild(o); } sel.value=String(state.currentIndex); updateNav(); }
     function updateNav(){ if(!state.chapters.length){ el('prev').disabled=true; el('next').disabled=true; return; } const idxs=state.chapters.map(c=>c.index); const pos=idxs.indexOf(state.currentIndex); el('prev').disabled=pos<=0; el('next').disabled=pos<0||pos>=idxs.length-1; }
 
-    async function loadCurrent(){ const chap = state.chapters.find(c=>c.index===state.currentIndex) || state.chapters[0]; if(!chap) return; el('chapter').value=String(chap.index); el('title').textContent = chap.title; let text=''; try{ if(state.mode==='builtin'){ const url = state.bookKey + '/' + chap.file; text = await fetchText(url); } else if(state.mode==='server'){ const url = `/api/books/${encodeURIComponent(state.serverId)}/chapter/${encodeURIComponent(chap.index)}`; const r = await fetch(url); if(!r.ok) throw 0; text = await r.text(); } else { const id=state.bookKey.replace(/^upload:/,''); text = sessionStorage.getItem('upload:'+id+':ch:'+chap.index)||''; } }catch{ text=''; }
+    function deriveTitle(text, fallback){
+      try{
+        const lines=String(text||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+        const re=/^(?:第[零一二三四五六七八九十百千万两0-9]+[章节回卷部集]\s*)?第?[零一二三四五六七八九十百千万两0-9]+[章节回][^\n\r]*$/;
+        for(const s of lines){ if(re.test(s)) return s; }
+        if(lines[0]) return lines[0].slice(0,60);
+      }catch{}
+      return fallback;
+    }
+
+    async function loadCurrent(){ const chap = state.chapters.find(c=>c.index===state.currentIndex) || state.chapters[0]; if(!chap) return; el('chapter').value=String(chap.index); el('title').textContent = chap.title; let text=''; try{ if(state.mode==='builtin'){ const url = state.bookKey + '/' + chap.file; text = await fetchText(url, state.encoding); } else if(state.mode==='server'){ const url = `/api/books/${encodeURIComponent(state.serverId)}/chapter/${encodeURIComponent(chap.index)}`; const r = await fetch(url); if(!r.ok) throw 0; text = await r.text(); } else { const id=state.bookKey.replace(/^upload:/,''); text = sessionStorage.getItem('upload:'+id+':ch:'+chap.index)||''; } }catch{ text=''; }
+      const shownTitle = /�/.test(chap.title||'') ? deriveTitle(text, chap.title) : chap.title;
+      el('title').textContent = shownTitle;
+      try{ const sel=el('chapter'); const opt=[...sel.options].find(o=>o.value===String(chap.index)); if(opt){ opt.textContent=String(chap.index).padStart(4,'0')+' · '+shownTitle; } }catch{}
       el('content').textContent = text; window.scrollTo({top:0,behavior:'instant'});
       saveLast(); saveProgress(); saveProgressServer();
     }

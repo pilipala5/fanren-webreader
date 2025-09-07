@@ -90,6 +90,8 @@
 
     async function init(){
       const bookSelect=$('book'), chapSelect=$('chapter'), titleEl=$('title'), contentEl=$('content'), noticeEl=$('notice'), fsSelect=$('fs');
+      try{ const link=document.createElement('link'); link.rel='stylesheet'; link.href='assets/style.css'; document.head.appendChild(link);}catch{}
+      try{ if(bookSelect && bookSelect.closest) bookSelect.closest('label').style.display='none'; }catch{}
       const userMenu=$('userMenu'), userBtn=$('userBtn'), userNameEl=$('userName');
       const modal=$('authModal'), tabLogin=$('tabLogin'), tabRegister=$('tabRegister'), formLogin=$('formLogin'), formRegister=$('formRegister');
       const btnCloseModal=$('btnCloseModal');

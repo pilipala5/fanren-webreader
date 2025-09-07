@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>灵阅书屋 · 收藏</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <script>
+    let API_AVAILABLE=false; const state={ items:[], serverMeta:new Map(), userName:null };
+    function el(id){ return document.getElementById(id); }
+    async function pingAPI(){ const c=new AbortController(); setTimeout(()=>c.abort(),600); try{ const r=await fetch('/api/health',{signal:c.signal}); API_AVAILABLE=r.ok; }catch{ API_AVAILABLE=false; } }
+    async function authMe(){ if(!API_AVAILABLE) return null; try{ const r=await fetch('/api/auth/me'); if(!r.ok) return null; return await r.json(); }catch{return null;} }
+    async function loadProgress(){ let items={}; if(API_AVAILABLE){ try{ const r=await fetch('/api/progress'); if(r.ok){ const j=await r.json(); if(j.ok) items=j.items||{}; }}catch{} }
+      for(const k of Object.keys(localStorage)) if(k.startsWith('novel:p:')){ const bk=k.slice('novel:p:'.length); if(items[bk]==null) items[bk]=Number(localStorage.getItem(k)||0)||0; }
+      return items;
+    }
+    async function loadServerMeta(id){ if(state.serverMeta.has(id)) return state.serverMeta.get(id); try{ const r=await fetch('/api/books/'+encodeURIComponent(id)); if(!r.ok) return null; const j=await r.json(); if(j&&j.ok){ state.serverMeta.set(id,j); return j; } }catch{} return null; }
+    function card({title,subtitle,href}){ const a=document.createElement('a'); a.className='book-card'; a.href=href; a.style.textDecoration='none'; a.innerHTML=`<div class="cover">${title}</div><div class="body"><div class="title">${title}</div><div class="meta">${subtitle||''}</div></div>`; return a; }
+    async function render(){ const grid=el('grid'); grid.innerHTML=''; const items=state.items; const builtin=new Set(['凡人修仙传','凡人修仙传·仙界篇']);
+      for(const [key,idx] of Object.entries(items)){
+        if(key.startsWith('srv:')){ const id=key.slice(4); const meta=await loadServerMeta(id); const title=meta?.book?.title||('服务器书籍 '+id); const total=(meta?.chapters||[]).length; const href='viewer.html?srv='+encodeURIComponent(id); grid.appendChild(card({title,subtitle:`已读至第 ${idx} 章 · 共 ${total} 章`,href}));
+        } else if(builtin.has(key)) { const href='viewer.html?book='+encodeURIComponent(key); grid.appendChild(card({title:key,subtitle:`已读至第 ${idx} 章`,href})); }
+      }
+    }
+    function renderAuth(){ const u=el('userName'); if(u) u.textContent = state.userName || '未登录'; }
+    async function init(){ await pingAPI(); if(API_AVAILABLE){ const me=await authMe(); if(me&&me.ok&&me.loggedIn) state.userName=me.username; } renderAuth(); state.items=await loadProgress(); render(); }
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</head>
+<body>
+  <div class="topbar">
+    <div class="container row">
+      <a class="btn" href="/">← 返回首页</a>
+      <div class="brand">灵阅书屋 · 收藏</div>
+      <div class="spacer"></div>
+      <span class="small">账户：</span><strong id="userName" class="small">未登录</strong>
+    </div>
+  </div>
+  <div class="container">
+    <div id="grid" class="grid"></div>
+  </div>
+</body>
+</html>
+

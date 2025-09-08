@@ -116,6 +116,76 @@
       el('btnLogout').addEventListener('click', async ()=>{ await authLogout(); state.userName=null; renderAuth(); });
     }
     document.addEventListener('DOMContentLoaded', init);
+
+    // ===== 覆盖与增强：隐藏“本地会话”，并在配额不足时清理未完成缓存 =====
+    // 是否在首页显示“本地会话”上传（sessionStorage）
+    const SHOW_LOCAL_UPLOADS = false;
+
+    function clearUploadSession(id){
+      try{
+        const prefix='upload:'+id+':';
+        for(const k of Object.keys(sessionStorage)){
+          if(k.startsWith(prefix)){
+            try{ sessionStorage.removeItem(k); }catch{}
+          }
+        }
+      }catch{}
+    }
+
+    function purgeAllLocalUploads(){
+      try{
+        for(const k of Object.keys(sessionStorage)){
+          if(k.startsWith('upload:')){
+            try{ sessionStorage.removeItem(k); }catch{}
+          }
+        }
+      }catch{}
+    }
+
+    function writeUploadToSessionOrCleanup(id, manifest, chapters){
+      const prefix='upload:'+id+':';
+      try{
+        sessionStorage.setItem(prefix+'manifest', JSON.stringify(manifest));
+        for(const ch of chapters){ sessionStorage.setItem(prefix+'ch:'+ch.index, ch.body); }
+        return true;
+      }catch(e){
+        try{
+          for(const k of Object.keys(sessionStorage)){
+            if(k.startsWith(prefix)){
+              try{ sessionStorage.removeItem(k); }catch{}
+            }
+          }
+        }catch{}
+        console.error('写入会话存储失败', e);
+        alert('存储空间不足，已清理未完成的本地缓存。请改为“保存到服务器”或减小文件后再试。');
+        return false;
+      }
+    }
+
+    // 覆盖渲染逻辑：不展示“本地会话”
+    function renderGrid(){
+      const grid = el('bookGrid'); if(!grid) return; grid.innerHTML='';
+      // 内置
+      for(const b of BOOKS){ const m=state.books[b.key]; if(!m) continue; const total=(m.chapters||[]).length; const k=b.key; const idx=Number(state.progress[k]||localStorage.getItem('novel:p:'+k)||0)||0; grid.appendChild(bookCard({ key:k, title:b.key, subtitle:`章节数：${total}`, tag:'内置', href:'viewer.html?book='+encodeURIComponent(k), pos: idx })); }
+      // 服务器书库
+      for(const sb of state.serverBooks){ const k='srv:'+sb.id; const total=sb.chapters||0; const idx=Number(state.progress[k]||localStorage.getItem('novel:p:'+k)||0)||0; grid.appendChild(bookCard({ key:k, title:sb.title, subtitle:`章节数：${total} · 上传者：${sb.uploader}`, tag:'服务器', href:'viewer.html?srv='+encodeURIComponent(sb.id), pos: idx })); }
+      // 可选：仅当允许时才展示本地会话
+      if(SHOW_LOCAL_UPLOADS){
+        const sessKeys = Object.keys(sessionStorage).filter(k=>k.startsWith('upload:') && k.endsWith(':manifest'));
+        for(const key of sessKeys){ try{ const mani=JSON.parse(sessionStorage.getItem(key)||'null'); if(!mani) continue; const id=mani.id; const cnt=Array.isArray(mani.chapters)? mani.chapters.length:0; const href='viewer.html?upload='+encodeURIComponent(id); grid.appendChild(bookCard({ key:'upload:'+id, title: mani.title||('上传书籍 '+id), subtitle:`本地会话 · 章节数：${cnt}`, tag:'本地', href, pos:0 })); }catch{} }
+      }
+    }
+
+    // 覆盖各上传处理：写入失败即清理并不显示
+    async function handleTxt(file){ const text=await readFileSmartText(file); const chapters=splitTxt(text); const id='u:'+Date.now()+':'+Math.random().toString(36).slice(2); const title=file.name.replace(/\.[^.]+$/,''); const mani={id,title,type:'txt',chapters:chapters.map(c=>({index:c.index,title:c.title}))}; if(writeUploadToSessionOrCleanup(id, mani, chapters)){ renderGrid(); } }
+    async function handleEpub(file){ try{ await ensureJSZip(); const zip=await JSZip.loadAsync(file); let opf='content.opf'; try{ const c=await zip.file('META-INF/container.xml').async('string'); const dom=new DOMParser().parseFromString(c,'application/xml'); const rf=dom.querySelector('rootfile'); if(rf) opf=rf.getAttribute('full-path')||opf; }catch{} const opfText=await zip.file(opf).async('string'); const o=new DOMParser().parseFromString(opfText,'application/xml'); const man={}; o.querySelectorAll('manifest>item').forEach(i=>{ man[i.getAttribute('id')]=i.getAttribute('href'); }); const spine=Array.from(o.querySelectorAll('spine>itemref')).map(x=>man[x.getAttribute('idref')]).filter(Boolean); const base=opf.split('/').slice(0,-1).join('/'); const texts=[]; for(let i=0;i<spine.length;i++){ const p=(base? base+'/':'')+spine[i]; const f=zip.file(p); if(!f) continue; try{ const html=await f.async('string'); const doc=new DOMParser().parseFromString(html,'text/html'); const h=doc.querySelector('h1,h2,h3,title'); const title=h? (h.textContent||'').trim().slice(0,60) : ('章节 '+(i+1)); const body=(doc.body? doc.body.innerText : doc.textContent)||''; texts.push({index:i+1,title:title||('章节 '+(i+1)), body: body.trim()}); }catch{} } const id='u:'+Date.now()+':'+Math.random().toString(36).slice(2); const title=file.name.replace(/\.[^.]+$/,''); const mani={id,title,type:'epub',chapters:texts.map(c=>({index:c.index,title:c.title}))}; if(writeUploadToSessionOrCleanup(id, mani, texts)){ renderGrid(); } }catch(e){ alert('EPUB 解析失败: '+(e&&e.message? e.message : e)); }
+    async function handlePdf(file){ try{ await ensurePdfJs(); const arr=new Uint8Array(await file.arrayBuffer()); const pdf=await pdfjsLib.getDocument({data:arr}).promise; const texts=[]; for(let p=1;p<=pdf.numPages;p++){ const page=await pdf.getPage(p); const content=await page.getTextContent(); const s=content.items.map(it=>it.str||'').join(''); texts.push({ index:p, title:'第 '+p+' 页', body:s.trim() }); } const id='u:'+Date.now()+':'+Math.random().toString(36).slice(2); const title=file.name.replace(/\.[^.]+$/,''); const mani={id,title,type:'pdf',chapters:texts.map(c=>({index:c.index,title:c.title}))}; if(writeUploadToSessionOrCleanup(id, mani, texts)){ renderGrid(); } }catch(e){ alert('PDF 解析失败: '+(e&&e.message? e.message : e)); }
+    async function handleDocx(file){ try{ await ensureMammoth(); const ab=await file.arrayBuffer(); const r=await mammoth.convertToHtml({arrayBuffer:ab}); const html=r&&r.value||''; const doc=new DOMParser().parseFromString(html,'text/html'); const sections=Array.from(doc.querySelectorAll('h1,h2,h3')).map((h,i)=>({ i, title:(h.textContent||'').trim(), node:h })); const texts=[]; if(sections.length){ for(let i=0;i<sections.length;i++){ const cur=sections[i].node; const next=i+1<sections.length? sections[i+1].node : null; let body=''; let n=cur.nextSibling; while(n && n!==next){ if(n.nodeType===1){ body += (n.innerText||n.textContent||'')+'\n'; } else if(n.nodeType===3){ body += n.textContent; } n=n.nextSibling; } texts.push({ index:i+1, title: sections[i].title || ('章节 '+(i+1)), body: body.trim() }); } } else { const body = doc.body ? (doc.body.innerText||doc.body.textContent) : doc.textContent; texts.push({ index:1, title: file.name.replace(/\.[^.]+$/,''), body: String(body||'').trim() }); } const id='u:'+Date.now()+':'+Math.random().toString(36).slice(2); const title=file.name.replace(/\.[^.]+$/,''); const mani={id,title,type:'docx',chapters:texts.map(c=>({index:c.index,title:c.title}))}; if(writeUploadToSessionOrCleanup(id, mani, texts)){ renderGrid(); } }catch(e){ alert('DOCX 解析失败: '+(e&&e.message? e.message : e)); }
+    async function handleMarkdown(file){ try{ const text=await readFileAsText(file); const lines=String(text).replace(/\r\n?/g,'\n').split('\n'); const heads=[]; for(let i=0;i<lines.length;i++){ if(/^\s*#+\s+/.test(lines[i])) heads.push([lines[i].replace(/^\s*#+\s+/,'').trim(), i]); } const out=[]; const push=(i,t,b)=>out.push({index:i,title:t,body:b.join('\n').trimStart()}); if(!heads.length){ push(1, file.name.replace(/\.[^.]+$/,''), lines); } else { for(let i=0;i<heads.length;i++){ const [t,s]=heads[i]; const e=i+1<heads.length? heads[i+1][1] : lines.length; const body=lines.slice(s,e); push(i+1,t,body); } } const id='u:'+Date.now()+':'+Math.random().toString(36).slice(2); const title=file.name.replace(/\.[^.]+$/,''); const mani={id,title,type:'md',chapters:out.map(c=>({index:c.index,title:c.title}))}; if(writeUploadToSessionOrCleanup(id, mani, out)){ renderGrid(); } }catch(e){ alert('Markdown 解析失败: '+(e&&e.message? e.message : e)); }
+    async function handleHtml(file){ try{ const html=await readFileAsText(file); let doc=new DOMParser().parseFromString(html,'text/html'); if(!doc||!doc.body){ doc=new DOMParser().parseFromString(html,'application/xhtml+xml'); } const title=((doc.querySelector&&doc.querySelector('title'))? doc.querySelector('title').textContent : file.name.replace(/\.[^.]+$/,''))||''; const body=(doc.body? (doc.body.innerText||doc.body.textContent) : doc.textContent)||''; const texts=[{ index:1, title: String(title).trim(), body: String(body||'').trim() }]; const id='u:'+Date.now()+':'+Math.random().toString(36).slice(2); const mani={id:title||file.name,type:'html',chapters:texts.map(c=>({index:c.index,title:c.title}))}; if(writeUploadToSessionOrCleanup(id, mani, texts)){ renderGrid(); } }catch(e){ alert('HTML 解析失败: '+(e&&e.message? e.message : e)); }
+
+    // DOM 就绪后立即清理所有本地上传痕迹，以免展示失败项
+    document.addEventListener('DOMContentLoaded', ()=>{ if(!SHOW_LOCAL_UPLOADS){ purgeAllLocalUploads(); renderGrid(); } });
   </script>
 </head>
 <body>

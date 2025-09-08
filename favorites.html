@@ -3,20 +3,25 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>鐏甸槄涔﹀眿 路 鏀惰棌</title>
+  <title>灵阅书屋 · 收藏</title>
   <link rel="stylesheet" href="assets/style.css" />
   <script>
     let API_AVAILABLE=false; const state={ items:[], serverMeta:new Map(), userName:null };
-    function el(id){ return document.getElementById(id); }
+    const BUILTIN = new Set(['凡人修仙传','凡人修仙传·仙界篇']);
+    const $ = (id)=>document.getElementById(id);
+
     async function pingAPI(){ const c=new AbortController(); setTimeout(()=>c.abort(),600); try{ const r=await fetch('/api/health',{signal:c.signal}); API_AVAILABLE=r.ok; }catch{ API_AVAILABLE=false; } }
     async function authMe(){ if(!API_AVAILABLE) return null; try{ const r=await fetch('/api/auth/me'); if(!r.ok) return null; return await r.json(); }catch{return null;} }
     async function loadFavorites(){ if(!API_AVAILABLE) return []; try{ const r=await fetch('/api/favorites'); if(!r.ok) return []; const j=await r.json(); if(j&&j.ok) return j.items||[]; }catch{} return []; }
     async function loadServerMeta(id){ if(state.serverMeta.has(id)) return state.serverMeta.get(id); try{ const r=await fetch('/api/books/'+encodeURIComponent(id)); if(!r.ok) return null; const j=await r.json(); if(j&&j.ok){ state.serverMeta.set(id,j); return j; } }catch{} return null; }
+
     function card({title,subtitle,href}){ const a=document.createElement('a'); a.className='book-card link'; a.href=href; a.style.textDecoration='none'; a.innerHTML=`<div class="cover">${title}</div><div class="body"><div class="title">${title}</div><div class="meta">${subtitle||''}</div></div>`; return a; }
-    async function render(){ const grid=el('grid'); grid.innerHTML=''; const items=state.items; const builtin=new Set(['鍑′汉淇粰浼?,'鍑′汉淇粰浼犅蜂粰鐣岀瘒']);
-      for(const it of items){ const key=String(it.book||''); if(!key) continue; if(key.startsWith('srv:')){ const id=key.slice(4); const meta=await loadServerMeta(id); const title=meta?.book?.title||('鏈嶅姟鍣ㄤ功绫?'+id); const total=(meta?.chapters||[]).length; const href='viewer.html?srv='+encodeURIComponent(id); grid.appendChild(card({title,subtitle:`鍏?${total} 绔燻,href})); } else if(builtin.has(key)) { const href='viewer.html?book='+encodeURIComponent(key); grid.appendChild(card({title:key,subtitle:'鍐呯疆涔︾睄',href})); } }
+
+    async function render(){ const grid=$('grid'); grid.innerHTML=''; for(const it of state.items){ const key=String(it.book||''); if(!key) continue; if(key.startsWith('srv:')){ const id=key.slice(4); const meta=await loadServerMeta(id); const title=meta?.book?.title||('服务器书籍 '+id); const total=(meta?.chapters||[]).length; const href='viewer.html?srv='+encodeURIComponent(id); grid.appendChild(card({title,subtitle:`章节数 ${total}`,href})); } else if(BUILTIN.has(key)) { const href='viewer.html?book='+encodeURIComponent(key); grid.appendChild(card({title:key,subtitle:'内置书籍',href})); } }
     }
-    function renderAuth(){ const u=el('userName'); if(u) u.textContent = state.userName || '鏈櫥褰?; }
+
+    function renderAuth(){ const u=$('userName'); if(u) u.textContent = state.userName || '未登录'; }
+
     async function init(){ await pingAPI(); if(API_AVAILABLE){ const me=await authMe(); if(me&&me.ok&&me.loggedIn) state.userName=me.username; } renderAuth(); state.items=await loadFavorites(); render(); }
     window.addEventListener('DOMContentLoaded', init);
   </script>
@@ -24,34 +29,17 @@
 <body>
   <div class="topbar">
     <div class="container row">
-      <a class="btn" href="/">鈫?杩斿洖棣栭〉</a>
-      <div class="brand">鐏甸槄涔﹀眿 路 鏀惰棌</div>
+      <a class="btn" href="/">← 返回首页</a>
+      <div class="brand">灵阅书屋 · 收藏</div>
       <div class="spacer"></div>
-      <span class="small">璐︽埛锛?/span><strong id="userName" class="small">鏈櫥褰?/strong>
+      <span class="small">账户：</span><strong id="userName" class="small">未登录</strong>
     </div>
   </div>
   <div class="container">
     <div id="grid" class="grid"></div>
   </div>
   <div class="container footer">
-    <div>QQ: 407292550 路 WeChat: gdb1314_ 路 Email: yuhan.huang@whu.edu.cn</div>
+    <div>QQ: 407292550 · WeChat: gdb1314_ · Email: yuhan.huang@whu.edu.cn</div>
   </div>
 </body>
-<script>
-  // 修正文案与内置书名（覆盖）
-  (function(){
-    const BUILTIN_KEYS = new Set(['凡人修仙传','凡人修仙传·仙界篇']);
-    function card({title,subtitle,href}){ const a=document.createElement('a'); a.className='book-card link'; a.href=href; a.style.textDecoration='none'; a.innerHTML=`<div class="cover">${title}</div><div class="body"><div class="title">${title}</div><div class="meta">${subtitle||''}</div></div>`; return a; }
-    async function render(){ const grid=document.getElementById('grid'); if(!grid) return; grid.innerHTML=''; const items=(window.state&&window.state.items)||[]; for(const it of items){ const key=String(it.book||''); if(!key) continue; if(key.startsWith('srv:')){ const id=key.slice(4); const meta=await window.loadServerMeta(id); const title=meta?.book?.title||('服务器书籍 '+id); const total=(meta?.chapters||[]).length; const href='viewer.html?srv='+encodeURIComponent(id); grid.appendChild(card({title,subtitle:`共 ${total} 章`,href})); } else if(BUILTIN_KEYS.has(key)) { const href='viewer.html?book='+encodeURIComponent(key); grid.appendChild(card({title:key,subtitle:'内置书籍',href})); } }
-    }
-    window.render = render;
-    document.addEventListener('DOMContentLoaded', ()=>{
-      try{ const back=document.querySelector('.topbar a.btn'); if(back) back.textContent='返回首页'; }catch{}
-      try{ const u=document.getElementById('userName'); if(u) u.textContent = (window.state&&window.state.userName)||'未登录'; }catch{}
-      try{ const smalls=document.querySelectorAll('.topbar .small'); if(smalls&&smalls[0]) smalls[0].textContent='账户：'; }catch{}
-    });
-  })();
-</script>
 </html>
-
-

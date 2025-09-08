@@ -1,0 +1,18 @@
+*.html text eol=lf working-tree-encoding=UTF-8
+*.css  text eol=lf working-tree-encoding=UTF-8
+*.js   text eol=lf working-tree-encoding=UTF-8
+*.md   text eol=lf working-tree-encoding=UTF-8
+*.json text eol=lf working-tree-encoding=UTF-8
+*.sql  text eol=lf working-tree-encoding=UTF-8
+*.py   text eol=lf working-tree-encoding=UTF-8
+
+# Keep binaries untouched
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+

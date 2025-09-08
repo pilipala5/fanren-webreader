@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>鐏甸槄涔﹀眿 路 闃呰鍣?/title>
+  <title>灵阅书屋 · 阅读器</title>
   <link rel="stylesheet" href="assets/style.css" />
   <script>
     const FS = { small: 16, medium: 19, large: 22 };
     const BUILTINS = [
-      { key: '鍑′汉淇粰浼?, manifest: '鍑′汉淇粰浼?manifest.json' },
-      { key: '鍑′汉淇粰浼犅蜂粰鐣岀瘒', manifest: '鍑′汉淇粰浼犅蜂粰鐣岀瘒/manifest.json' },
+      { key: '凡人修仙传', manifest: '凡人修仙传/manifest.json' },
+      { key: '凡人修仙传·仙界篇', manifest: '凡人修仙传·仙界篇/manifest.json' },
     ];
 
     const state = {
@@ -26,19 +26,21 @@
       encoding: 'utf-8',
     };
 
-    function el(id){ return document.getElementById(id); }
+    const $ = (id) => document.getElementById(id);
+
     async function pingAPI(){ const c=new AbortController(); setTimeout(()=>c.abort(),800); try{ const r=await fetch('/api/health',{signal:c.signal}); state.api=r.ok; }catch{ state.api=false; } }
-    async function authMe(){ if(!state.api) return null; try{ const r=await fetch('/api/auth/me'); if(!r.ok) return null; const j=await r.json(); if(j&&j.ok&&j.loggedIn){ state.userName=j.username; } }catch{} }
+    async function authMe(){ if(!state.api) return; try{ const r=await fetch('/api/auth/me'); if(r.ok){ const j=await r.json(); if(j&&j.ok&&j.loggedIn){ state.userName=j.username; } } }catch{} }
+
     function setFont(key){ state.font=FS[key]? key : 'medium'; document.documentElement.style.setProperty('--content-size', FS[state.font]+'px'); try{ localStorage.setItem('novel:fs', state.font);}catch{} }
     function saveLast(){ try{ localStorage.setItem('novel:last', JSON.stringify({ book: state.bookKey, index: state.currentIndex })); }catch{} }
     function saveProgress(){ try{ localStorage.setItem('novel:p:'+state.bookKey, String(state.currentIndex)); }catch{} }
     async function saveProgressServer(){ if(!state.api || !state.userName) return; try{ await fetch('/api/progress',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({book: state.bookKey, index: state.currentIndex})}); }catch{} }
-    async function fetchJSON(url){ const r=await fetch(url); if(!r.ok) throw new Error('鍔犺浇澶辫触 '+url); return await r.json(); }
+
+    async function fetchJSON(url){ const r=await fetch(url); if(!r.ok) throw new Error('加载失败 '+url); return await r.json(); }
     async function fetchText(url, encoding='utf-8'){
-      // 瀵归潪 UTF-8 鏂囨湰鐢?TextDecoder 瑙ｇ爜
       const enc = String(encoding||'utf-8').toLowerCase();
-      if(enc==='utf-8' || enc==='utf8'){ const r=await fetch(url); if(!r.ok) throw new Error('鍔犺浇澶辫触 '+url); return await r.text(); }
-      const r = await fetch(url); if(!r.ok) throw new Error('鍔犺浇澶辫触 '+url);
+      if(enc==='utf-8' || enc==='utf8'){ const r=await fetch(url); if(!r.ok) throw new Error('加载失败 '+url); return await r.text(); }
+      const r = await fetch(url); if(!r.ok) throw new Error('加载失败 '+url);
       const buf = await r.arrayBuffer();
       const mapped = (enc==='gb2312'||enc==='gbk')? 'gb18030' : enc;
       const dec = new TextDecoder(mapped, { fatal:false });
@@ -51,10 +53,8 @@
       const p = new URLSearchParams(location.search);
       const book = p.get('book');
       const srv = p.get('srv');
-      const up = null;
       if (book) { state.mode='builtin'; state.bookKey=book; return; }
       if (srv)  { state.mode='server'; state.serverId=String(srv); state.bookKey='srv:'+state.serverId; return; }
-      /* upload mode disabled */
       // fallback to last
       try{ const last = JSON.parse(localStorage.getItem('novel:last')||'null'); if(last&&last.book){ state.bookKey=last.book; if(/^srv:\d+/.test(last.book)){ state.mode='server'; state.serverId=last.book.replace(/^srv:/,''); } else { state.mode='builtin'; } state.currentIndex = Number(last.index)||0; return; } }catch{}
       // fallback builtin
@@ -70,115 +70,84 @@
         state.currentIndex = state.currentIndex || (state.chapters[0]?.index || 0);
       } else if (state.mode==='server') {
         const j = await fetchJSON(`/api/books/${encodeURIComponent(state.serverId)}`);
-        if(!j||!j.ok) throw new Error('鏈嶅姟鍣ㄤ功绫嶄笉瀛樺湪');
+        if(!j||!j.ok) throw new Error('服务器书籍不存在');
         state.chapters = (j.chapters||[]).map(c=>({ index:c.index, title:c.title }));
-        state.currentIndex = state.currentIndex || (state.chapters[0]?.index || 0);
-      } else if (false) {
-        const id = state.bookKey.replace(/^upload:/,'');
-        const mani = JSON.parse(sessionStorage.getItem('upload:'+id+':manifest')||'null');
-        if(!mani||!Array.isArray(mani.chapters)) throw new Error('涓婁紶浼氳瘽宸插け鏁?);
-        state.chapters = mani.chapters.map(c=>({ index:c.index, title:c.title }));
         state.currentIndex = state.currentIndex || (state.chapters[0]?.index || 0);
       }
     }
 
-    function renderChapters(){ const sel=el('chapter'); sel.innerHTML=''; for(const c of state.chapters){ const o=document.createElement('option'); o.value=String(c.index); o.textContent=String(c.index).padStart(4,'0')+' 路 '+c.title; sel.appendChild(o); } sel.value=String(state.currentIndex); updateNav(); }
-    function updateNav(){ if(!state.chapters.length){ el('prev').disabled=true; el('next').disabled=true; return; } const idxs=state.chapters.map(c=>c.index); const pos=idxs.indexOf(state.currentIndex); el('prev').disabled=pos<=0; el('next').disabled=pos<0||pos>=idxs.length-1; }
-
-    function deriveTitle(text, fallback){
-      try{
-        const lines=String(text||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-        const re=/^(?:绗琜闆朵竴浜屼笁鍥涗簲鍏竷鍏節鍗佺櫨鍗冧竾涓?-9]+[绔犺妭鍥炲嵎閮ㄩ泦]\s*)?绗?[闆朵竴浜屼笁鍥涗簲鍏竷鍏節鍗佺櫨鍗冧竾涓?-9]+[绔犺妭鍥瀅[^\n\r]*$/;
-        for(const s of lines){ if(re.test(s)) return s; }
-        if(lines[0]) return lines[0].slice(0,60);
-      }catch{}
-      return fallback;
+    async function loadAndRender(){
+      const chap = state.chapters.find(c=>Number(c.index)===Number(state.currentIndex));
+      if(!chap){ $('title').textContent=''; $('content').textContent=''; return; }
+      $('chapter').value = String(state.currentIndex);
+      $('title').textContent = chap.title || ('第 '+state.currentIndex+' 章');
+      let text = '';
+      if(state.mode==='builtin'){
+        const mf = BUILTINS.find(b=>b.key===state.bookKey);
+        const base = (mf && mf.manifest.includes('/')) ? mf.manifest.slice(0, mf.manifest.lastIndexOf('/')) : '';
+        const file = (chap.file||'').replace(/^\/+/, '');
+        const url = base? (base + '/' + file) : file;
+        text = await fetchText(url, state.encoding);
+      } else if (state.mode==='server') {
+        const url = `/api/books/${encodeURIComponent(state.serverId)}/chapter/${encodeURIComponent(state.currentIndex)}`;
+        const r = await fetch(url);
+        if(!r.ok) throw new Error('加载失败 '+url);
+        text = await r.text();
+      }
+      $('content').textContent = text;
+      saveLast();
+      saveProgress();
+      await saveProgressServer();
     }
 
-    async function loadCurrent(){ const chap = state.chapters.find(c=>c.index===state.currentIndex) || state.chapters[0]; if(!chap) return; el('chapter').value=String(chap.index); el('title').textContent = chap.title; let text=''; try{ if(state.mode==='builtin'){ const url = state.bookKey + '/' + chap.file; text = await fetchText(url, state.encoding); } else if(state.mode==='server'){ const url = `/api/books/${encodeURIComponent(state.serverId)}/chapter/${encodeURIComponent(chap.index)}`; const r = await fetch(url); if(!r.ok) throw 0; text = await r.text(); } else if(false) { const id=state.bookKey.replace(/^upload:/,''); text = sessionStorage.getItem('upload:'+id+':ch:'+chap.index)||''; } }catch{ text=''; }
-      const shownTitle = /锟?.test(chap.title||'') ? deriveTitle(text, chap.title) : chap.title;
-      el('title').textContent = shownTitle;
-      try{ const sel=el('chapter'); const opt=[...sel.options].find(o=>o.value===String(chap.index)); if(opt){ opt.textContent=String(chap.index).padStart(4,'0')+' 路 '+shownTitle; } }catch{}
-      el('content').textContent = text; window.scrollTo({top:0,behavior:'instant'});
-      saveLast(); saveProgress(); saveProgressServer();
+    function bindEvents(){
+      $('chapter').addEventListener('change', async (e)=>{ state.currentIndex = Number(e.target.value||0)||0; await loadAndRender(); });
+      $('prev').addEventListener('click', async ()=>{ const i=state.chapters.findIndex(c=>Number(c.index)===Number(state.currentIndex)); if(i>0){ state.currentIndex=state.chapters[i-1].index; await loadAndRender(); } });
+      $('next').addEventListener('click', async ()=>{ const i=state.chapters.findIndex(c=>Number(c.index)===Number(state.currentIndex)); if(i>=0 && i<state.chapters.length-1){ state.currentIndex=state.chapters[i+1].index; await loadAndRender(); } });
+      $('fs').addEventListener('change', (e)=> setFont(e.target.value));
+      document.addEventListener('keydown', async (e)=>{ if(e.key==='ArrowLeft'){ $('prev').click(); } else if(e.key==='ArrowRight'){ $('next').click(); } });
     }
-
-    async function gotoPrev(){ const idxs=state.chapters.map(c=>c.index); const pos=idxs.indexOf(state.currentIndex); if(pos>0){ state.currentIndex=idxs[pos-1]; await loadCurrent(); } }
-    async function gotoNext(){ const idxs=state.chapters.map(c=>c.index); const pos=idxs.indexOf(state.currentIndex); if(pos>=0 && pos<idxs.length-1){ state.currentIndex=idxs[pos+1]; await loadCurrent(); } }
 
     async function init(){
-      try{ const saved=localStorage.getItem('novel:fs'); if(saved&&FS[saved]) state.font=saved; }catch{}
-      document.documentElement.style.setProperty('--content-size', FS[state.font]+'px');
-      await pingAPI(); await authMe();
+      setFont(localStorage.getItem('novel:fs')||'medium');
+      await pingAPI();
+      await authMe();
       await loadBuiltinsManifests();
       await resolveFromParams();
-      // restore local per-book progress if present
-      try{ const p = Number(localStorage.getItem('novel:p:'+state.bookKey)||'0')||0; if(p) state.currentIndex=p; }catch{}
       await loadChapters();
-      renderChapters();
-      await loadCurrent();
-      // events
-      el('chapter').addEventListener('change', async ()=>{ state.currentIndex=Number(el('chapter').value); await loadCurrent(); });
-      el('fs').addEventListener('change', ()=>{ setFont(el('fs').value); }); el('fs').value=state.font;
-      el('prev').addEventListener('click', gotoPrev); el('next').addEventListener('click', gotoNext);
-      document.addEventListener('keydown', (e)=>{ if(e.altKey||e.ctrlKey||e.metaKey||e.shiftKey) return; const tag=(e.target&&e.target.tagName||'').toLowerCase(); if(tag==='input'||tag==='textarea'||e.isComposing) return; if(e.key==='ArrowLeft'){ e.preventDefault(); gotoPrev(); } else if(e.key==='ArrowRight'){ e.preventDefault(); gotoNext(); } });
+      // render chapter options
+      const sel = $('chapter'); sel.innerHTML=''; for(const c of state.chapters){ const o=document.createElement('option'); o.value=String(c.index); o.textContent=String(c.index).padStart(4,'0')+' · '+(c.title||('第 '+c.index+' 章')); sel.appendChild(o); }
+      if(state.currentIndex) sel.value=String(state.currentIndex);
+      bindEvents();
+      await loadAndRender();
     }
-    window.addEventListener('DOMContentLoaded', init);
+    document.addEventListener('DOMContentLoaded', init);
   </script>
 </head>
 <body>
   <div class="topbar">
     <div class="container row">
-      <a class="btn" href="/">鈫?杩斿洖棣栭〉</a>
-      <div class="brand">鐏甸槄涔﹀眿 路 闃呰鍣?/div>
+      <a class="btn" href="/">← 返回首页</a>
+      <div class="brand">灵阅书屋 · 阅读器</div>
       <div class="spacer"></div>
     </div>
   </div>
   <div class="container reader-wrap">
     <div class="reader-header">
-      <label>绔犺妭锛?select id="chapter"></select></label>
-      <label>瀛楀彿锛?select id="fs"><option value="small">灏?/option><option value="medium">涓?/option><option value="large">澶?/option></select></label>
+      <label>章节：<select id="chapter"></select></label>
+      <label>字号：<select id="fs"><option value="small">小</option><option value="medium" selected>中</option><option value="large">大</option></select></label>
     </div>
     <div class="reader-content">
       <div class="reader-title" id="title"></div>
       <div id="content" style="white-space:pre-wrap; line-height:1.9"></div>
     </div>
     <div class="bottom-nav">
-      <button class="btn nav-btn" id="prev">涓婁竴绔?/button>
-      <button class="btn nav-btn" id="next">涓嬩竴绔?/button>
+      <button class="btn nav-btn" id="prev">上一章</button>
+      <button class="btn nav-btn" id="next">下一章</button>
     </div>
   </div>
   <div class="container footer">
-    <div>QQ: 407292550 路 WeChat: gdb1314_ 路 Email: yuhan.huang@whu.edu.cn</div>
+    <div>QQ: 407292550 · WeChat: gdb1314_ · Email: yuhan.huang@whu.edu.cn</div>
   </div>
-  <script>
-    // 修正内置清单与界面文本（覆盖）
-    (function(){
-      const GOOD_BOOKS = [
-        { key: '凡人修仙传', manifest: '凡人修仙传/manifest.json' },
-        { key: '凡人修仙传·仙界篇', manifest: '凡人修仙传·仙界篇/manifest.json' },
-      ];
-      async function fetchJSON(url){ const r = await fetch(url); if(!r.ok) throw 0; return await r.json(); }
-      async function loadBuiltinsManifests(){ for(const b of GOOD_BOOKS){ try{ window.state.manifests[b.key] = await fetchJSON(b.manifest); }catch{} } }
-      async function resolveFromParams(){
-        const p = new URLSearchParams(location.search);
-        const book = p.get('book'); const srv = p.get('srv');
-        if (book) { state.mode='builtin'; state.bookKey=book; return; }
-        if (srv)  { state.mode='server'; state.serverId=String(srv); state.bookKey='srv:'+state.serverId; return; }
-        try{ const last = JSON.parse(localStorage.getItem('novel:last')||'null'); if(last&&last.book){ state.bookKey=last.book; if(/^srv:\\d+/.test(last.book)){ state.mode='server'; state.serverId=last.book.replace(/^srv:/,''); } else { state.mode='builtin'; } state.currentIndex = Number(last.index)||0; return; } }catch{}
-        state.mode='builtin'; state.bookKey=GOOD_BOOKS[0].key;
-      }
-      window.loadBuiltinsManifests = loadBuiltinsManifests;
-      window.resolveFromParams = resolveFromParams;
-      document.addEventListener('DOMContentLoaded', ()=>{
-        try{ document.title = '灵阅书屋 · 阅读器'; }catch{}
-        try{ const brand = document.querySelector('.topbar .brand'); if(brand) brand.textContent = '灵阅书屋 · 阅读器'; }catch{}
-        try{ const hdr = document.querySelector('.reader-header'); if(hdr){ const labels = hdr.querySelectorAll('label'); if(labels[0]) labels[0].innerHTML = '章节：<select id="chapter"></select>'; if(labels[1]) labels[1].innerHTML = '字号：<select id="fs"><option value="small">小</option><option value="medium">中</option><option value="large">大</option></select>'; } }catch{}
-        try{ const prev=document.getElementById('prev'); const next=document.getElementById('next'); if(prev) prev.textContent='上一章'; if(next) next.textContent='下一章'; }catch{}
-      });
-    })();
-  </script>
 </body>
 </html>
-
-

@@ -14,6 +14,7 @@
     .list{max-height:260px;overflow:auto;border:1px dashed var(--border);border-radius:10px;padding:8px 10px;background:#fafafa}
     .progress{height:8px;background:#eef2ff;border-radius:999px;overflow:hidden}
     .progress>span{display:block;height:100%;background:var(--brand);width:0%}
+    .right{margin-left:auto}
     .danger{color:#b91c1c}
     .hidden{display:none}
     .badge{display:inline-block;padding:1px 6px;border-radius:999px;font-size:11px;background:#eef2ff;color:#334155;margin-left:8px}
@@ -24,10 +25,10 @@
     let API_AVAILABLE=false;
     let state={ userName:null, file:null, text:'', encoding:'auto', chapters:[], title:'', cover:null };
 
-    // 目录页识别阈值（温和值，可按需调）
+    // 目录/短章识别阈值（温和，按需微调）
     const TOC_CONF = {
       linkDensity: 0.35,          // 链接密度阈值（a 标签数 / 文本行数）
-      chapterHeadingMin: 10,      // 命中“第X章/回/节/篇…”行的最少数量
+      chapterHeadingMin: 10,      // “第X章/回/节/篇 …”命中行最少数量
       plainTextMax: 400,          // 去掉链接文本后的纯文本最大字数
       liCountMin: 10,             // <li> 数量较多也提示目录
       shortChapterLen: 120,       // 结果清洗：极短章节长度阈值
@@ -35,8 +36,8 @@
       duplicateWindow: 5          // 结果清洗：标题重复查找窗口
     };
 
+    // 章节标题识别
     const CHAPTER_TITLE_RE = /^(?:\s*(?:正文)\s*)?(?:(?:第[〇零一二三四五六七八九十百千万两0-9０-９]+(?:卷|部|集|回|编)\s*)?)第[〇零一二三四五六七八九十百千万两0-9０-９]+(?:章|回|节|话|篇)[^\n\r]*$|^\s*(序章|楔子|引子|终章|尾声|后记|番外(?:[ 0-9０-９一二三四五六七八九十百千万两]*)?|外传|完本感言|大结局)[^\n\r]*$/;
-
     const TOC_KEYWORDS_RE = /(目录|目次|contents|返回目录|回目录|主目录)/i;
 
     /* ------------------- API & 登录 ------------------- */
@@ -47,6 +48,17 @@
     async function ensureLogin(){ if(!API_AVAILABLE) return false; if(state.userName) return true; const u=prompt('用户名'); if(!u) return false; const p=prompt('密码（不少于6位）'); if(!p) return false; const r=await authLogin(u,p); if(r&&r.ok){ state.userName=u; renderAuth(); return true; } alert(r?.error||'登录失败'); return false; }
 
     /* ------------------- 工具函数 ------------------- */
+    const norm = s => String(s||'').replace(/^[\s\u3000]+|[\s\u3000]+$/g,'').replace(/\s+/g,' ').toLowerCase();
+
+    // 去掉正文开头重复的标题 & 收敛空行
+    function stripLeadingTitle(text, title){
+      let lines = String(text||'').replace(/\r\n?/g,'\n').split('\n');
+      const t = norm(title);
+      for(let k=0;k<2;k++){ if(lines.length && norm(lines[0])===t) lines.shift(); }
+      let s = lines.join('\n').replace(/\n{3,}/g,'\n\n').replace(/^\n+/, '');
+      return s;
+    }
+
     function inferTitleFromFile(file){ const name=file?.name||''; if(!name) return ''; const base=name.replace(/\.[^.]+$/,''); return base.slice(0,60); }
 
     async function readFileAsText(file, enc){
@@ -94,23 +106,27 @@
       return await new Promise((res)=>{ const img=new Image(); img.onload=()=>{ const r=Math.min(maxW/img.width, maxH/img.height, 1); const w=Math.round(img.width*r), h=Math.round(img.height*r); const c=document.createElement('canvas'); c.width=w; c.height=h; const ctx=c.getContext('2d'); ctx.drawImage(img,0,0,w,h); res(c.toDataURL('image/jpeg', quality)); }; img.src=dataUrl; });
     }
 
-    /* ------------------- 章节切分 ------------------- */
+    /* ------------------- 切章（不再把标题写进正文） ------------------- */
     function splitChapters(text){
       text=String(text||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
       const lines=text.split('\n');
-      const pats=[CHAPTER_TITLE_RE];
-      const isHeading=(s)=>{ const t=String(s||'').trim(); if(!t) return false; return pats.some(p=>p.test(t)); };
+      const isHeading=(s)=>CHAPTER_TITLE_RE.test(String(s||'').trim());
       const hits=[];
       for(let i=0;i<lines.length;i++){ if(isHeading(lines[i])) hits.push({i,title:lines[i].trim()}); }
+
       const chapters=[];
       const pushChapter=(idx,title,bodyLines)=>{
         const ttl=String(title||'').trim()||`章节 ${idx}`;
-        let content=bodyLines.join('\n');
-        const first=(bodyLines[0]||'').trim();
-        if(first!==ttl){ content = ttl + '\n\n' + content; }
+        const outLines = bodyLines.slice();
+        if(outLines.length && norm(outLines[0])===norm(ttl)) outLines.shift(); // 去掉正文首行“与标题相同”的行
+        let content = outLines.join('\n').replace(/\n{3,}/g,'\n\n').replace(/^\n+/, '');
         chapters.push({ index: idx, title: ttl, content: content.replace(/\n+$/,'') });
       };
-      if(hits.length===0){ pushChapter(1,'全文',lines); return chapters; }
+
+      if(hits.length===0){
+        pushChapter(1,'全文',lines);
+        return chapters;
+      }
       if(hits[0].i>0){
         const pre=lines.slice(0,hits[0].i);
         if(pre.some(s=>String(s).trim())) pushChapter(0,'开篇',pre);
@@ -119,14 +135,13 @@
         const start=hits[k].i;
         const end=(k+1<hits.length)? hits[k+1].i : lines.length;
         const body=lines.slice(start,end);
-        const nextIdx = chapters.length? chapters[chapters.length-1].index+1 : (hits[0].i>0? 1 : 1);
-        pushChapter(nextIdx, hits[k].title, body);
+        pushChapter(chapters.length? chapters[chapters.length-1].index+1 : (hits[0].i>0? 1 : 1), hits[k].title, body);
       }
       for(let i=0;i<chapters.length;i++){ chapters[i].index = i + (chapters[0].title==='开篇'? 0 : 1); }
       return chapters;
     }
 
-    /* ------------------- 目录页识别（EPUB） ------------------- */
+    /* ------------------- 目录页识别（EPUB 内容层） ------------------- */
     function isInternalHref(href){
       if(!href) return false;
       const t=href.trim();
@@ -134,7 +149,6 @@
       if(/^https?:/i.test(t)) return false;
       return /\.(xhtml?|xml)(#|$)/i.test(t);
     }
-
     function isLikelyTocDoc(doc){
       try{
         const body=doc.body||doc;
@@ -145,25 +159,17 @@
         const internalLinks=aList.filter(a=>isInternalHref(a.getAttribute('href'))).length;
         const linkDensity = lines.length? (aList.length/lines.length) : 0;
 
-        // 链接文本长度
         const anchorTextLen = aList.reduce((s,a)=> s + (a.textContent||'').trim().length, 0);
         const plainLen = Math.max(0, text.trim().length - anchorTextLen);
 
-        // 命中“第X章…”的标题行数
         const headingLines = countChapterHeadingLines(text);
-
         const firstLine = (lines[0]||'').slice(0,20);
         const title = (doc.querySelector('title')?.textContent||'').trim();
         const hasKeyword = TOC_KEYWORDS_RE.test(firstLine) || TOC_KEYWORDS_RE.test(title);
 
-        // 强规则：大量章节行 + 高链接密度/大量站内链接
-        if(headingLines >= TOC_CONF.chapterHeadingMin && (linkDensity >= TOC_CONF.linkDensity || (internalLinks >= 8 && internalLinks >= aList.length*0.6))){
-          return true;
-        }
-        // 列表结构很强 + 多章节行
-        if(liCount >= TOC_CONF.liCountMin && headingLines >= 6){ return true; }
-        // 有目录关键词 + 多章节行 + 纯文本很少
-        if(hasKeyword && headingLines >= 6 && plainLen <= TOC_CONF.plainTextMax){ return true; }
+        if(headingLines >= TOC_CONF.chapterHeadingMin && (linkDensity >= TOC_CONF.linkDensity || (internalLinks >= 8 && internalLinks >= aList.length*0.6))) return true;
+        if(liCount >= TOC_CONF.liCountMin && headingLines >= 6) return true;
+        if(hasKeyword && headingLines >= 6 && plainLen <= TOC_CONF.plainTextMax) return true;
       }catch{}
       return false;
     }
@@ -171,22 +177,17 @@
     /* ------------------- 结果清洗（兜底） ------------------- */
     function postCleanChapters(chapters){
       const cleaned=[];
-      // 预扫描：找到“极短簇”
       let i=0;
       while(i<chapters.length){
         let j=i, cnt=0;
         while(j<chapters.length && chapters[j].content.trim().length <= TOC_CONF.shortChapterLen){ j++; cnt++; }
-        if(cnt >= TOC_CONF.shortClusterThreshold){
-          // 丢弃这整个簇
-          i=j; continue;
-        }
-        // 否则逐个检查
+        if(cnt >= TOC_CONF.shortClusterThreshold){ i=j; continue; } // 丢弃“极短簇”
         const ch=chapters[i];
         const txt=ch.content.trim();
         const isVeryShort = txt.length <= TOC_CONF.shortChapterLen;
         const hasTocKeyword = TOC_KEYWORDS_RE.test(txt);
         const looksLikeHeadingOnly = CHAPTER_TITLE_RE.test(ch.title||'') && textLines(txt).length <= 3;
-        // 如果附近窗口内存在“同名更长章节”，则删除当前短小章节（多半是目录行）
+
         let hasLongSameAfter=false;
         if(isVeryShort && looksLikeHeadingOnly){
           const winEnd=Math.min(chapters.length-1, i+TOC_CONF.duplicateWindow);
@@ -203,12 +204,11 @@
         }
         i++;
       }
-      // 重新编号
       for(let t=0;t<cleaned.length;t++){ cleaned[t].index=t+1; }
       return cleaned;
     }
 
-    /* ------------------- EPUB 解析（集成三层过滤） ------------------- */
+    /* ------------------- EPUB 解析（三层过滤集成） ------------------- */
     async function parseEpub(file){
       await ensureJSZip();
       const buf=await file.arrayBuffer();
@@ -226,7 +226,7 @@
       const baseDir=opfPath.split('/').slice(0,-1).join('/');
       const resolve=(href)=> href && (baseDir? (baseDir+'/'+href).replace(/\/+/, '/') : href);
 
-      // manifest 映射
+      // manifest
       const manifest=new Map();
       opf.querySelectorAll('manifest > item').forEach(it=>{
         manifest.set(it.getAttribute('id'), {
@@ -237,32 +237,27 @@
         });
       });
 
-      // 层 1：基于元数据排除“导航文档”等
+      // 层 1：基于元数据排除“导航/非正文”
       const excludedHrefs=new Set();
-      // properties~="nav"
       for(const it of manifest.values()){
-        if((it.props||'').split(/\s+/).includes('nav')) excludedHrefs.add(it.href);
+        if((it.props||'').split(/\s+/).includes('nav')) excludedHrefs.add(it.href); // EPUB3 nav
       }
-      // guide -> toc
       const guideToc = opf.querySelector('guide > reference[type="toc"]')?.getAttribute('href');
       if(guideToc) excludedHrefs.add(resolve(guideToc));
-      // 可选再排除一些典型非正文（有的书会把这些放进 spine 里）
       const guideEx = ['cover','title-page','copyright-page','acknowledgements','colophon','glossary','index'];
       opf.querySelectorAll('guide > reference').forEach(ref=>{
         const type=(ref.getAttribute('type')||'').toLowerCase();
         if(guideEx.includes(type)){ excludedHrefs.add(resolve(ref.getAttribute('href')||'')); }
       });
 
-      // spine 顺序
+      // spine 顺序（仅 HTML/XHTML）
       const spineItems = Array
         .from(opf.querySelectorAll('spine > itemref'))
         .map(it=> manifest.get(it.getAttribute('idref')))
         .filter(Boolean)
         .filter(it=>{
           if(!it.href) return false;
-          // 只要 XHTML/HTML
           if(!(it.media? /xhtml|html/i.test(it.media) : /\.(x?html?)$/i.test(it.href))) return false;
-          // 排除导航/非正文
           if(excludedHrefs.has(it.href)) return false;
           return true;
         });
@@ -276,9 +271,7 @@
         if(metaId && manifest.get(metaId)) coverHref=manifest.get(metaId).href;
       }
       if(!coverHref){
-        for(const [id,it] of manifest){
-          if(/cover/i.test(it.href) && /^image\//.test(it.media||'')){ coverHref=it.href; break; }
-        }
+        for(const [id,it] of manifest){ if(/cover/i.test(it.href) && /^image\//.test(it.media||'')){ coverHref=it.href; break; } }
       }
 
       let cover=null;
@@ -288,7 +281,7 @@
         cover=await shrinkImageDataURL(data,360,480,0.82);
       }
 
-      // 遍历 spine：层 2 检测目录页；再切章；最后层 3 清洗
+      // 遍历 spine：层 2 内容判定 → 切章 → 层 3 清洗
       const chapters=[];
       let idx=1;
       for(const it of spineItems){
@@ -296,40 +289,39 @@
         const html=await readText(it.href);
         const doc=new DOMParser().parseFromString(html,'text/html');
 
-        // 层 2：像目录页就整页跳过（不产出章节）
+        // 层 2：像目录页就整页跳过
         if(isLikelyTocDoc(doc)){
           console.debug('[EPUB] 跳过目录页：', it.href);
           continue;
         }
 
         const t=(doc.querySelector('h1,h2,title')?.textContent||'').trim()||`章节 ${idx}`;
-        const text=doc.body ? (doc.body.textContent||'') : html.replace(/<[^>]+>/g,'');
+        const rawText=doc.body ? (doc.body.textContent||'') : html.replace(/<[^>]+>/g,'');
+        const text = stripLeadingTitle(rawText, t); // 关键：去掉正文开头重复标题 & 收敛空行
         const splits=splitChapters(text);
+
         if(splits.length<=1){
-          chapters.push({ index: idx++, title: t, content: `${t}\n\n${text}`.replace(/\n+$/,'') });
+          chapters.push({ index: idx++, title: t, content: text });
         } else {
           for(const s of splits){ chapters.push({ index: idx++, title: s.title, content: s.content }); }
         }
       }
 
       const title=(opf.querySelector('metadata > title, metadata > dc\\:title')?.textContent||'').trim()||inferTitleFromFile(file);
-      // 层 3：结果兜底清洗
       const cleaned = postCleanChapters(chapters);
       return { title, chapters: cleaned, cover }
     }
 
-    /* ------------------- PDF 解析（目录页过滤） ------------------- */
+    /* ------------------- PDF 解析（页级目录过滤 + 兜底清洗） ------------------- */
     function isLikelyPdfToc(text){
       const lines=textLines(text).filter(Boolean);
       const headingLines=lines.reduce((n,ln)=> n + (CHAPTER_TITLE_RE.test(ln)?1:0), 0);
       const hasKeyword = TOC_KEYWORDS_RE.test(lines[0]||'') || TOC_KEYWORDS_RE.test(lines.slice(0,5).join(' '));
       const avgLen = lines.length? (lines.join('').length/lines.length) : 0;
-      // 章节行很多 + 平均段落很短，或有目录关键词
       if(headingLines >= TOC_CONF.chapterHeadingMin && (avgLen < 20 || hasKeyword)) return true;
       if(hasKeyword && headingLines >= 8) return true;
       return false;
     }
-
     async function parsePdf(file){
       await ensurePDF();
       const data=new Uint8Array(await file.arrayBuffer());
@@ -339,22 +331,17 @@
         const page=await pdf.getPage(p);
         const txt=await page.getTextContent();
         const s=(txt.items||[]).map(it=>it.str||'').join(' ');
-        // 层 2（PDF）：页级目录识别，命中就跳过
-        if(isLikelyPdfToc(s)){
-          console.debug('[PDF] 跳过目录页：page', p);
-          continue;
-        }
+        if(isLikelyPdfToc(s)){ console.debug('[PDF] 跳过目录页：page', p); continue; }
         pages.push(s);
       }
       const full=pages.join('\n');
       let chapters=splitChapters(full);
       if(chapters.length<=1){
-        chapters = pages.map((s,i)=>({ index:i+1, title:`第 ${i+1} 页`, content:`第 ${i+1} 页\n\n${s}` }));
+        chapters = pages.map((s,i)=>({ index:i+1, title:`第 ${i+1} 页`, content: s.replace(/\n{3,}/g,'\n\n').replace(/^\n+/, '') }));
       } else {
         for(let i=0;i<chapters.length;i++){ chapters[i].index=i+1; }
       }
       const title=inferTitleFromFile(file);
-      // 层 3：结果兜底清洗
       const cleaned = postCleanChapters(chapters);
       return { title, chapters: cleaned, cover:null }
     }
@@ -391,7 +378,6 @@
         if(/\.txt$/.test(name)){
           const enc=$('enc').value||'auto';
           const text=await readFileAsText(file,enc);
-          state.text=text;
           out={ title: inferTitleFromFile(file), chapters: postCleanChapters(splitChapters(text)), cover:null };
         } else if(/\.epub$/.test(name)){
           out=await parseEpub(file);

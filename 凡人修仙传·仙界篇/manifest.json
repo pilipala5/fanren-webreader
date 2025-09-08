@@ -2,6 +2,7 @@
   "book": "凡人修仙传·仙界篇",
   "source": "2.txt",
   "encoding": "utf-8",
+  "source_encoding": "utf-8",
   "chapters": [
     {
       "index": 0,

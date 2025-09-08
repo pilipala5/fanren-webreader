@@ -1,7 +1,8 @@
 {
   "book": "凡人修仙传",
   "source": "1.txt",
-  "encoding": "gb2312",
+  "encoding": "utf-8",
+  "source_encoding": "gb2312",
   "chapters": [
     {
       "index": 0,

@@ -79,10 +79,13 @@ def split_book(src_path: str, encoding: str, out_dir: str) -> Tuple[int, List[di
             chapters.append((title, idx))
 
     # If no chapters detected, write whole book into one file
+    # Note: output chapter files are written in UTF-8.
+    # Store output encoding for the reader, and keep source encoding for reference.
     manifest = {
         "book": out_dir,
         "source": src_path,
-        "encoding": encoding,
+        "encoding": "utf-8",          # encoding of chapter files
+        "source_encoding": encoding,    # original source text encoding
         "chapters": [],
     }
 

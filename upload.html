@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>上传书本</title>
-  <link rel="stylesheet" href="assets/style.css" />
+  <link rel="stylesheet" href="/assets/style.css" />
   <style>
     .card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;box-shadow:0 8px 30px rgba(0,0,0,.05)}
     .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
@@ -41,35 +41,35 @@
       return tryDecode(label) ?? new TextDecoder(label,{fatal:false}).decode(buf);
     }
 
-    /* ====== 仅本地依赖的动态加载（关键修复）====== */
+    /* ====== 仅本地依赖（改成绝对路径 /assets/...） ====== */
     function loadScriptLocal(src){
       return new Promise((resolve,reject)=>{
         const s=document.createElement('script');
-        s.src=src; s.async=true;
+        // 强制使用根路径，避免 /upload 下的相对路径问题
+        s.src = src.startsWith('/') ? src : ('/' + src.replace(/^\/+/, ''));
+        s.async=true;
         s.onload=()=>resolve();
-        s.onerror=()=>reject(new Error('脚本加载失败：'+src+'（请确认该文件已随站点发布）'));
+        s.onerror=()=>reject(new Error('脚本加载失败：'+s.src+'（请确认该文件已随站点发布）'));
         document.head.appendChild(s);
       });
     }
-
     async function ensureJSZip(){
       if(window.JSZip) return;
-      await loadScriptLocal('assets/jszip.min.js');
+      await loadScriptLocal('/assets/jszip.min.js');
       if(!window.JSZip){
-        throw new Error('JSZip 未正确加载（assets/jszip.min.js）。请确认文件已存在且未被重写。');
+        throw new Error('JSZip 未正确加载（/assets/jszip.min.js）。请确认文件已存在且未被重写。');
       }
     }
-
     async function ensurePDF(){
       if(window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions) return;
-      await loadScriptLocal('assets/pdf.min.js');
+      await loadScriptLocal('/assets/pdf.min.js');
       if(!(window.pdfjsLib && window.pdfjsLib.GlobalWorkerOptions)){
-        throw new Error('PDF.js 未正确加载（assets/pdf.min.js）。请确认文件已存在且未被重写。');
+        throw new Error('PDF.js 未正确加载（/assets/pdf.min.js）。请确认文件已存在且未被重写。');
       }
       try{
-        window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'assets/pdf.worker.min.js';
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc = '/assets/pdf.worker.min.js';
       }catch{
-        throw new Error('无法设置 PDF.js worker，确保存在 assets/pdf.worker.min.js');
+        throw new Error('无法设置 PDF.js worker，确保存在 /assets/pdf.worker.min.js');
       }
     }
     /* ========================================= */
@@ -87,29 +87,11 @@
         /^\s*(序章|楔子|引子|终章|尾声|后记|番外(?:[ 0-9０-９一二三四五六七八九十百千万两]*)?|外传|完本感言|大结局)[^\n\r]*$/
       ];
       const isHeading=(s)=>{ const t=String(s||'').trim(); if(!t) return false; return pats.some(p=>p.test(t)); };
-      const hits=[];
-      for(let i=0;i<lines.length;i++){ if(isHeading(lines[i])) hits.push({i,title:lines[i].trim()}); }
-      const chapters=[];
-      const pushChapter=(idx,title,bodyLines)=>{
-        const ttl=String(title||'').trim()||`章节 ${idx}`;
-        let content=bodyLines.join('\n');
-        const first=(bodyLines[0]||'').trim();
-        if(first!==ttl){ content = ttl + '\n\n' + content; }
-        chapters.push({ index: idx, title: ttl, content: content.replace(/\n+$/,'') });
-      };
-      if(hits.length===0){
-        pushChapter(1,'全文',lines); return chapters;
-      }
-      if(hits[0].i>0){
-        const pre=lines.slice(0,hits[0].i);
-        if(pre.some(s=>String(s).trim())) pushChapter(0,'开篇',pre);
-      }
-      for(let k=0;k<hits.length;k++){
-        const start=hits[k].i;
-        const end=(k+1<hits.length)? hits[k+1].i : lines.length;
-        const body=lines.slice(start,end);
-        pushChapter(chapters.length? chapters[chapters.length-1].index+1 : (hits[0].i>0? 1 : 1), hits[k].title, body);
-      }
+      const hits=[]; for(let i=0;i<lines.length;i++){ if(isHeading(lines[i])) hits.push({i,title:lines[i].trim()}); }
+      const chapters=[]; const push=(idx,title,body)=>{ const ttl=String(title||'').trim()||`章节 ${idx}`; let content=body.join('\n'); const first=(body[0]||'').trim(); if(first!==ttl){ content = ttl + '\n\n' + content; } chapters.push({ index: idx, title: ttl, content: content.replace(/\n+$/,'') }); };
+      if(hits.length===0){ push(1,'全文',lines); return chapters; }
+      if(hits[0].i>0){ const pre=lines.slice(0,hits[0].i); if(pre.some(s=>String(s).trim())) push(0,'开篇',pre); }
+      for(let k=0;k<hits.length;k++){ const start=hits[k].i; const end=(k+1<hits.length)? hits[k+1].i : lines.length; push(chapters.length? chapters[chapters.length-1].index+1 : (hits[0].i>0? 1 : 1), hits[k].title, lines.slice(start,end)); }
       for(let i=0;i<chapters.length;i++){ chapters[i].index = i + (chapters[0].title==='开篇'? 0 : 1); }
       return chapters;
     }
@@ -150,9 +132,7 @@
         if(metaId && manifest.get(metaId)) coverHref=manifest.get(metaId).href;
       }
       if(!coverHref){
-        for(const [id,it] of manifest){
-          if(/cover/i.test(it.href) && /^image\//.test(it.media||'')){ coverHref=it.href; break; }
-        }
+        for(const [id,it] of manifest){ if(/cover/i.test(it.href) && /^image\//.test(it.media||'')){ coverHref=it.href; break; } }
       }
 
       let cover=null;

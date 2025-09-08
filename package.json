@@ -1,0 +1,6 @@
+{
+  "devDependencies": {
+    "jszip": "^3.10.1",
+    "pdfjs-dist": "^3.11.174"
+  }
+}

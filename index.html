@@ -1,15 +1,16 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>灵阅书屋 · 首页</title>
+  <title>鐏甸槄涔﹀眿 路 棣栭〉</title>
   <link rel="stylesheet" href="assets/style.css" />
+  <script defer src="https://cdn.jsdelivr.net/npm/fflate@0.8.0/umd/index.js"></script>
   <script>
-    // 内置书籍列表（静态清单）
+    // 鍐呯疆涔︾睄鍒楄〃锛堥潤鎬佹竻鍗曪級
     const BOOKS = [
-      { key: '凡人修仙传', manifest: '凡人修仙传/manifest.json', source: 'builtin' },
-      { key: '凡人修仙传·仙界篇', manifest: '凡人修仙传·仙界篇/manifest.json', source: 'builtin' },
+      { key: '鍑′汉淇粰浼?, manifest: '鍑′汉淇粰浼?manifest.json', source: 'builtin' },
+      { key: '鍑′汉淇粰浼犅蜂粰鐣岀瘒', manifest: '鍑′汉淇粰浼犅蜂粰鐣岀瘒/manifest.json', source: 'builtin' },
     ];
 
     let API_AVAILABLE = false;
@@ -18,7 +19,7 @@
 
     function el(id){ return document.getElementById(id); }
     async function pingAPI(){ const c=new AbortController(); setTimeout(()=>c.abort(),600); try{ const r=await fetch('/api/health',{signal:c.signal}); API_AVAILABLE=r.ok; }catch{ API_AVAILABLE=false; } }
-    async function fetchJSON(url){ const r=await fetch(url); if(!r.ok) throw new Error('加载失败'); return await r.json(); }
+    async function fetchJSON(url){ const r=await fetch(url); if(!r.ok) throw new Error('鍔犺浇澶辫触'); return await r.json(); }
     async function authMe(){ if(!API_AVAILABLE) return null; try{ const r=await fetch('/api/auth/me'); if(!r.ok) return null; return await r.json(); }catch{return null;} }
     async function authLogin(username,password){ if(!API_AVAILABLE) return { ok:false, error:'api disabled' }; const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})}); return await r.json(); }
     async function authLogout(){ if(!API_AVAILABLE) return; try{ await fetch('/api/auth/logout',{method:'POST'}); }catch{} }
@@ -36,51 +37,46 @@
         <div class="body">
           <div class="title">${escapeHtml(title)}</div>
           <div class="meta">${escapeHtml(subtitle||'')}</div>
-          <div class="chips"><span class="chip">${escapeHtml(tag||'')}</span>${pos? `<span class="chip">已读至第 ${pos} 章</span>`:''}</div>
+          <div class="chips"><span class="chip">${escapeHtml(tag||'')}</span>${pos? `<span class="chip">宸茶鑷崇 ${pos} 绔?/span>`:''}</div>
         </div>`;
       wrap.appendChild(a);
-      const fav=document.createElement('button'); fav.type='button'; fav.className='fav-btn'+(favs.has(String(key))?' active':''); fav.innerHTML='<span>★</span>';
+      const fav=document.createElement('button'); fav.type='button'; fav.className='fav-btn'+(favs.has(String(key))?' active':''); fav.innerHTML='<span>鈽?/span>';
       fav.addEventListener('click', async (e)=>{ e.preventDefault(); e.stopPropagation(); await favToggle(String(key)); });
       wrap.appendChild(fav);
       return wrap;
     }
 
-    // 不展示“本地会话”（sessionStorage）上传
-    const SHOW_LOCAL_UPLOADS = false;
+    // 涓嶅睍绀衡€滄湰鍦颁細璇濃€濓紙sessionStorage锛変笂浼?    const SHOW_LOCAL_UPLOADS = false;
 
     function renderGrid(){
       const grid = el('bookGrid'); if(!grid) return; grid.innerHTML='';
-      // 内置
-      for(const b of BOOKS){ const m=state.books[b.key]; if(!m) continue; const total=(m.chapters||[]).length; const k=b.key; const idx=Number(state.progress[k]||localStorage.getItem('novel:p:'+k)||0)||0; grid.appendChild(bookCard({ key:k, title:b.key, subtitle:`章节数：${total}`, tag:'内置', href:'viewer.html?book='+encodeURIComponent(k), pos: idx })); }
-      // 服务器
-      for(const sb of state.serverBooks){ const k='srv:'+sb.id; const total=sb.chapters||0; const idx=Number(state.progress[k]||localStorage.getItem('novel:p:'+k)||0)||0; grid.appendChild(bookCard({ key:k, title:sb.title, subtitle:`章节数：${total} · 上传者：${sb.uploader}`, tag:'服务器', href:'viewer.html?srv='+encodeURIComponent(sb.id), pos: idx })); }
-      // 不显示本地会话
-      if(SHOW_LOCAL_UPLOADS){
+      // 鍐呯疆
+      for(const b of BOOKS){ const m=state.books[b.key]; if(!m) continue; const total=(m.chapters||[]).length; const k=b.key; const idx=Number(state.progress[k]||localStorage.getItem('novel:p:'+k)||0)||0; grid.appendChild(bookCard({ key:k, title:b.key, subtitle:`绔犺妭鏁帮細${total}`, tag:'鍐呯疆', href:'viewer.html?book='+encodeURIComponent(k), pos: idx })); }
+      // 鏈嶅姟鍣?      for(const sb of state.serverBooks){ const k='srv:'+sb.id; const total=sb.chapters||0; const idx=Number(state.progress[k]||localStorage.getItem('novel:p:'+k)||0)||0; grid.appendChild(bookCard({ key:k, title:sb.title, subtitle:`绔犺妭鏁帮細${total} 路 涓婁紶鑰咃細${sb.uploader}`, tag:'鏈嶅姟鍣?, href:'viewer.html?srv='+encodeURIComponent(sb.id), pos: idx })); }
+      // 涓嶆樉绀烘湰鍦颁細璇?      if(SHOW_LOCAL_UPLOADS){
         const sessKeys = Object.keys(sessionStorage).filter(k=>k.startsWith('upload:') && k.endsWith(':manifest'));
-        for(const key of sessKeys){ try{ const mani=JSON.parse(sessionStorage.getItem(key)||'null'); if(!mani) continue; const id=mani.id; const cnt=Array.isArray(mani.chapters)? mani.chapters.length:0; const href='viewer.html?upload='+encodeURIComponent(id); grid.appendChild(bookCard({ key:'upload:'+id, title: mani.title||('上传书籍 '+id), subtitle:`本地会话 · 章节数：${cnt}`, tag:'本地', href, pos:0 })); }catch{} }
+        for(const key of sessKeys){ try{ const mani=JSON.parse(sessionStorage.getItem(key)||'null'); if(!mani) continue; const id=mani.id; const cnt=Array.isArray(mani.chapters)? mani.chapters.length:0; const href='viewer.html?upload='+encodeURIComponent(id); grid.appendChild(bookCard({ key:'upload:'+id, title: mani.title||('涓婁紶涔︾睄 '+id), subtitle:`鏈湴浼氳瘽 路 绔犺妭鏁帮細${cnt}`, tag:'鏈湴', href, pos:0 })); }catch{} }
       }
     }
 
-    // 收藏 API（可选）
+    // 鏀惰棌 API锛堝彲閫夛級
     async function favLoad(){ if(!API_AVAILABLE) return; try{ const r=await fetch('/api/favorites'); if(!r.ok) return; const j=await r.json(); if(j&&j.ok){ favs.clear(); for(const it of (j.items||[])) favs.add(String(it.book)); } }catch{} }
-    async function favToggle(bookKey){ if(!API_AVAILABLE){ alert('未连接服务器'); return; } if(!state.userName){ if(!await ensureLogin()) return; }
+    async function favToggle(bookKey){ if(!API_AVAILABLE){ alert('鏈繛鎺ユ湇鍔″櫒'); return; } if(!state.userName){ if(!await ensureLogin()) return; }
       const action=favs.has(bookKey)? 'remove' : 'add';
       try{ const r=await fetch('/api/favorites',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action, book:bookKey})}); const j=await r.json(); if(r.ok&&j.ok){ if(action==='add') favs.add(bookKey); else favs.delete(bookKey); renderGrid(); } }catch{}
     }
 
-    // 登录状态渲染
-    function renderAuth(){ const u=el('userName'); const btnIn=el('btnLogin'); const btnOut=el('btnLogout'); if(state.userName){ u.textContent=state.userName; btnIn.style.display='none'; btnOut.style.display='inline-block'; } else { u.textContent='未登录'; btnIn.style.display='inline-block'; btnOut.style.display='none'; } }
-    async function ensureLogin(){ if(!API_AVAILABLE) return false; if(state.userName) return true; const u=prompt('用户名'); if(!u) return false; const p=prompt('密码（≥6位）'); if(!p) return false; const r=await authLogin(u,p); if(r&&r.ok){ state.userName=u; renderAuth(); return true; } alert(r?.error||'登录失败'); return false; }
+    // 鐧诲綍鐘舵€佹覆鏌?    function renderAuth(){ const u=el('userName'); const btnIn=el('btnLogin'); const btnOut=el('btnLogout'); if(state.userName){ u.textContent=state.userName; btnIn.style.display='none'; btnOut.style.display='inline-block'; } else { u.textContent='鏈櫥褰?; btnIn.style.display='inline-block'; btnOut.style.display='none'; } }
+    async function ensureLogin(){ if(!API_AVAILABLE) return false; if(state.userName) return true; const u=prompt('鐢ㄦ埛鍚?); if(!u) return false; const p=prompt('瀵嗙爜锛堚墺6浣嶏級'); if(!p) return false; const r=await authLogin(u,p); if(r&&r.ok){ state.userName=u; renderAuth(); return true; } alert(r?.error||'鐧诲綍澶辫触'); return false; }
 
-    // 上传相关：仅展示对话框提示，禁用本地缓存
+    // 涓婁紶鐩稿叧锛氫粎灞曠ず瀵硅瘽妗嗘彁绀猴紝绂佺敤鏈湴缂撳瓨
     function openUpload(){ el('uploadModal').classList.remove('hidden'); }
     function closeUpload(){ el('uploadModal').classList.add('hidden'); }
 
     function purgeAllLocalUploads(){ try{ for(const k of Object.keys(sessionStorage)){ if(k.startsWith('upload:')){ try{ sessionStorage.removeItem(k); }catch{} } } }catch{} }
 
     async function init(){
-      // 清理所有本地上传痕迹，避免页面展示失败项
-      purgeAllLocalUploads();
+      // 娓呯悊鎵€鏈夋湰鍦颁笂浼犵棔杩癸紝閬垮厤椤甸潰灞曠ず澶辫触椤?      purgeAllLocalUploads();
       await pingAPI();
       const me = await authMe(); if(me&&me.ok&&me.loggedIn){ state.userName=me.username; }
       renderAuth();
@@ -89,10 +85,10 @@
       await loadProgress();
       if(API_AVAILABLE) await favLoad();
       renderGrid();
-      // 事件绑定
+      // 浜嬩欢缁戝畾
       el('btnUpload').addEventListener('click', openUpload);
       el('closeUpload').addEventListener('click', closeUpload);
-      el('file').addEventListener('change', async (e)=>{ e.target.value=''; alert('由于浏览器配额限制，已禁用“本地会话”存储。请勾选“保存到服务器”并登录后再上传。'); });
+      el('file').addEventListener('change', async (e)=>{ e.target.value=''; alert('鐢变簬娴忚鍣ㄩ厤棰濋檺鍒讹紝宸茬鐢ㄢ€滄湰鍦颁細璇濃€濆瓨鍌ㄣ€傝鍕鹃€夆€滀繚瀛樺埌鏈嶅姟鍣ㄢ€濆苟鐧诲綍鍚庡啀涓婁紶銆?); });
       el('btnLogin').addEventListener('click', async ()=>{ await ensureLogin(); if(API_AVAILABLE) await favLoad(); renderGrid(); });
       el('btnLogout').addEventListener('click', async ()=>{ await authLogout(); state.userName=null; renderAuth(); });
     }
@@ -102,13 +98,13 @@
 <body>
   <div class="topbar">
     <div class="container row">
-      <div class="brand">灵阅书屋</div>
+      <div class="brand">鐏甸槄涔﹀眿</div>
       <div class="spacer"></div>
-      <a class="btn" href="favorites.html">收藏</a>
-      <button class="btn" id="btnUpload">上传</button>
-      <span class="small">账户：</span><strong id="userName" class="small">未登录</strong>
-      <button class="btn" id="btnLogin">登录/注册</button>
-      <button class="btn" id="btnLogout" style="display:none">退出</button>
+      <a class="btn" href="favorites.html">鏀惰棌</a>
+      <button class="btn" id="btnUpload">涓婁紶</button>
+      <span class="small">璐︽埛锛?/span><strong id="userName" class="small">鏈櫥褰?/strong>
+      <button class="btn" id="btnLogin">鐧诲綍/娉ㄥ唽</button>
+      <button class="btn" id="btnLogout" style="display:none">閫€鍑?/button>
     </div>
   </div>
   <div class="container">
@@ -116,17 +112,153 @@
   </div>
   <div id="uploadModal" class="modal-backdrop hidden">
     <div class="modal">
-      <div class="hd"><div>上传书籍（TXT / EPUB / PDF）</div><button class="btn" id="closeUpload">关闭</button></div>
+      <div class="hd"><div>涓婁紶涔︾睄锛圱XT / EPUB / PDF锛?/div><button class="btn" id="closeUpload">鍏抽棴</button></div>
       <div class="bd">
-        <input id="file" type="file" multiple accept=".txt,.epub,.pdf,application/epub+zip,application/pdf,text/plain" />
-        <div class="small">提示：为避免浏览器配额问题，已禁用“本地会话”存储，请登录并选择“保存到服务器”。</div>
+        <input id="file" type="file" multiple accept=".txt, text/plain" />
+        <div class="small">鎻愮ず锛氫负閬垮厤娴忚鍣ㄩ厤棰濋棶棰橈紝宸茬鐢ㄢ€滄湰鍦颁細璇濃€濆瓨鍌紝璇风櫥褰曞苟閫夋嫨鈥滀繚瀛樺埌鏈嶅姟鍣ㄢ€濄€?/div>
         <div id="uploads" class="grid"></div>
       </div>
     </div>
   </div>
+  <script>
+    // 瑕嗙洊涓婁紶浜や簰锛氫笉浣跨敤鏈湴浼氳瘽锛岄€夋嫨鏂囦欢鍚庣洿鎺ヤ笂浼犲埌鏈嶅姟鍣?    (function(){
+      function el(id){ return document.getElementById(id); }
+      function readFileAsText(file, encoding){
+        return new Promise((res, rej)=>{ const fr=new FileReader(); fr.onerror=()=>rej(fr.error||new Error('璇诲彇澶辫触')); fr.onload=()=>res(String(fr.result||'')); if(encoding) fr.readAsText(file, encoding); else fr.readAsText(file); });
+      }
+      function splitTxt(text){
+        const lines=String(text).replace(/\r\n?/g,'\n').split('\n');
+        const heads=[]; const re=/^\s*(?:绗琜闆朵竴浜屼笁鍥涗簲鍏竷鍏節鍗佺櫨鍗冧竾銆?-9]+[绔犺妭鍥炲嵎閮ㄥ垎]\s*)?绗?[闆朵竴浜屼笁鍥涗簲鍏竷鍏節鍗佺櫨鍗冧竾銆?-9]+[绔犲洖][^\n\r]*$/;
+        for(let i=0;i<lines.length;i++){ const s=lines[i].trim(); if(!s) continue; if(re.test(s)) heads.push([s,i]); }
+        const out=[]; const push=(i,t,b)=>out.push({index:i,title:t,body:b.join('\n').trimStart()});
+        if(!heads.length){ push(1,'鍏ㄦ枃',lines); return out; }
+        const firstStart=heads[0][1]; if(lines.slice(0,firstStart).some(x=>x.trim())) push(0,'寮€绡?,lines.slice(0,firstStart));
+        for(let i=0;i<heads.length;i++){ const [t,s]=heads[i]; const e=i+1<heads.length? heads[i+1][1] : lines.length; const body=lines.slice(s,e); if(!body.length||body[0].trim()!=t.trim()) body.unshift('',t); push(i+1,t,body); }
+        return out;
+      }
+      function makeUploadCard(title){
+        const esc = s => String(s||'').replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+        const wrap=document.createElement('div'); wrap.className='book-card';
+        wrap.innerHTML = `
+          <div class=\"cover\">${esc(title)}</div>
+          <div class=\"body\">\n            <div class=\"title\">${esc(title)}</div>\n            <div class=\"meta\" data-role=\"meta\">瑙ｆ瀽涓€?/div>\n            <div class=\"chips\" data-role=\"chips\"><span class=\"chip\">鍑嗗涓?/span></div>\n          </div>`;
+        return wrap;
+      }
+      async function uploadTxtFile(file){
+        // 渚濊禆涓婚〉鑴氭湰涓殑鍏ㄥ眬锛欰PI_AVAILABLE銆乻tate銆乪nsureLogin銆乴oadServerBooks銆乺enderGrid
+        if(!(window.API_AVAILABLE)) { alert('鏈繛鎺ユ湇鍔″櫒锛屾棤娉曚笂浼?); return; }
+        if(!(window.state && window.state.userName)) { if(!(await window.ensureLogin())) return; }
+        const uploads = document.getElementById('uploads');
+        const title = file.name.replace(/\.[^.]+$/, '');
+        const card = makeUploadCard(title);
+        uploads.appendChild(card);
+        const metaEl = card.querySelector('[data-role="meta"]');
+        const chipsEl = card.querySelector('[data-role="chips"]');
+        try{
+          metaEl.textContent = '璇诲彇鏂囦欢鈥?;
+          let text = await readFileAsText(file);
+          if((text.match(/\ufffd/g)||[]).length > 20){ text = await readFileAsText(file, 'gb18030'); }
+          metaEl.textContent = '瑙ｆ瀽绔犺妭鈥?;
+          const splits = splitTxt(text);
+          const chapters = splits.map(c=>({ index:c.index, title:c.title, content:c.body }));
+          chipsEl.innerHTML = `<span class=\"chip\">绔犺妭鏁帮細${chapters.length}</span>`;
+          metaEl.textContent = '寮€濮嬩笂浼犫€?;
+          const CHUNK=30; const total=chapters.length; let uploaded=0;
+          const first = chapters.slice(0, CHUNK);
+          const rest = chapters.slice(CHUNK);
+          const r1 = await fetch('/api/books',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,chapters:first})});
+          const j1 = await r1.json().catch(()=>null);
+          if(!r1.ok || !j1 || !j1.ok) throw new Error(j1?.error||'鍒涘缓涔︾睄澶辫触');
+          const id = j1.id; uploaded += first.length; chipsEl.innerHTML = `<span class=\"chip\">宸蹭紶锛?{uploaded}/${total}</span>`;
+          for(let i=0;i<rest.length;i+=CHUNK){ const batch=rest.slice(i,i+CHUNK); const r=await fetch(`/api/books/${encodeURIComponent(id)}/chapters`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chapters:batch})}); const jj=await r.json().catch(()=>null); if(!r.ok||!jj||!jj.ok) throw new Error(jj?.error||'杩藉姞绔犺妭澶辫触'); uploaded+=batch.length; chipsEl.innerHTML = `<span class=\"chip\">宸蹭紶锛?{uploaded}/${total}</span>`; }
+          metaEl.innerHTML = `涓婁紶瀹屾垚 路 <a href=\"viewer.html?srv=${encodeURIComponent(id)}\">鍓嶅線闃呰</a>`;
+          if(window.loadServerBooks) { await window.loadServerBooks(); }
+          if(window.renderGrid) { window.renderGrid(); }
+        }catch(e){ metaEl.textContent = '澶辫触锛?+String(e?.message||e); chipsEl.innerHTML = `<span class=\"chip\">鍑洪敊</span>`; }
+      }
+      document.addEventListener('DOMContentLoaded', ()=>{
+        const input = el('file');
+        if(input){
+          const clone = input.cloneNode(true);
+          clone.setAttribute('accept','.txt, text/plain');
+          input.replaceWith(clone);
+          clone.addEventListener('change', async (e)=>{
+            const files = Array.from(e.target.files||[]);
+            for(const f of files){ if(/\.txt$/i.test(f.name)) await uploadTxtFile(f); else alert('褰撳墠浠呮敮鎸?TXT锛孍PUB/PDF 绋嶅悗鏀寔'); }
+            e.target.value='';
+          });
+        }
+        const tip = document.querySelector('#uploadModal .bd .small');
+        if(tip) tip.textContent = '閫夋嫨鏂囦欢鍚庡皢鐩存帴瑙ｆ瀽骞朵笂浼犲埌鏈嶅姟鍣紙涓嶄繚瀛樺埌鏈湴锛夈€?;
+        const hdTitle = document.querySelector('#uploadModal .hd div');
+        if(hdTitle) hdTitle.textContent = '涓婁紶涔︾睄锛堝綋鍓嶆敮鎸?TXT锛?;
+      });
+    })();
+  </script>
   <div class="container footer">
-    <div>QQ: 407292550 · WeChat: gdb1314_ · Email: yuhan.huang@whu.edu.cn</div>
+    <div>QQ: 407292550 路 WeChat: gdb1314_ 路 Email: yuhan.huang@whu.edu.cn</div>
   </div>
+  <script>
+    // 直传优化覆盖：修正乱码、内置书清单、支持 EPUB 直传
+    (function(){
+      function el(id){ return document.getElementById(id); }
+      const GOOD_BOOKS = [
+        { key: '凡人修仙传', manifest: '凡人修仙传/manifest.json' },
+        { key: '凡人修仙传·仙界篇', manifest: '凡人修仙传·仙界篇/manifest.json' },
+      ];
+      async function fetchJSON(url){ const r=await fetch(url); if(!r.ok) throw 0; return await r.json(); }
+      // 覆盖内置加载，避免旧 BOOKS 配置乱码
+      async function loadBuiltins(){ for(const b of GOOD_BOOKS){ try{ window.state.books[b.key] = await fetchJSON(b.manifest); }catch{} } }
+      // 干净的卡片渲染（修正“已读至第 ?”乱码）
+      function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
+      function bookCard({ key, title, subtitle, tag, href, pos }){
+        const wrap=document.createElement('div'); wrap.className='book-card';
+        const a=document.createElement('a'); a.className='link'; a.href=href; a.style.textDecoration='none';
+        a.innerHTML = `
+          <div class="cover">${escapeHtml(title)}</div>
+          <div class="body">
+            <div class="title">${escapeHtml(title)}</div>
+            <div class="meta">${escapeHtml(subtitle||'')}</div>
+            <div class="chips"><span class="chip">${escapeHtml(tag||'')}</span>${pos? `<span class="chip">已读至第 ${pos} 章</span>`:''}</div>
+          </div>`;
+        wrap.appendChild(a);
+        const fav=document.createElement('button'); fav.type='button'; fav.className='fav-btn'+(window.favs&&window.favs.has(String(key))?' active':''); fav.innerHTML='<span>☆</span>';
+        fav.addEventListener('click', async (e)=>{ e.preventDefault(); e.stopPropagation(); if(window.favToggle) await window.favToggle(String(key)); });
+        wrap.appendChild(fav);
+        return wrap;
+      }
+      function renderGrid(){ const grid=el('bookGrid'); if(!grid) return; grid.innerHTML='';
+        for(const b of GOOD_BOOKS){ const m=window.state.books[b.key]; if(!m) continue; const total=(m.chapters||[]).length; const k=b.key; const idx=Number(window.state.progress[k]||localStorage.getItem('novel:p:'+k)||0)||0; grid.appendChild(bookCard({ key:k, title:b.key, subtitle:`章节数：${total}`, tag:'内置', href:'viewer.html?book='+encodeURIComponent(k), pos: idx })); }
+        for(const sb of (window.state.serverBooks||[])){ const k='srv:'+sb.id; const total=sb.chapters||0; const idx=Number(window.state.progress[k]||localStorage.getItem('novel:p:'+k)||0)||0; grid.appendChild(bookCard({ key:k, title:sb.title, subtitle:`章节数：${total} · 上传者：${sb.uploader}`, tag:'服务器', href:'viewer.html?srv='+encodeURIComponent(sb.id), pos: idx })); }
+      }
+      // 登录状态渲染（修正“未登?”乱码）
+      function renderAuth(){ const u=el('userName'); const btnIn=el('btnLogin'); const btnOut=el('btnLogout'); if(window.state.userName){ u.textContent=window.state.userName; btnIn.style.display='none'; btnOut.style.display='inline-block'; } else { u.textContent='未登录'; btnIn.style.display='inline-block'; btnOut.style.display='none'; } }
+      // 统一注册覆盖
+      window.loadBuiltins = loadBuiltins; window.renderGrid = renderGrid; window.renderAuth = renderAuth;
+
+      // 解析 TXT 保留，补充 EPUB 支持
+      function readFileAsText(file, encoding){ return new Promise((res, rej)=>{ const fr=new FileReader(); fr.onerror=()=>rej(fr.error||new Error('读取失败')); fr.onload=()=>res(String(fr.result||'')); if(encoding) fr.readAsText(file, encoding); else fr.readAsText(file); }); }
+      function splitTxt(text){ const lines=String(text).replace(/\r\n?/g,'\n').split('\n'); const heads=[]; const re=/^\s*(?:第[零一二三四五六七八九十百千万〇0-9]+[章节回卷部分]\s*)?第?[零一二三四五六七八九十百千万〇0-9]+[章回][^\n\r]*$/; for(let i=0;i<lines.length;i++){ const s=lines[i].trim(); if(!s) continue; if(re.test(s)) heads.push([s,i]); } const out=[]; const push=(i,t,b)=>out.push({index:i,title:t,body:b.join('\n').trimStart()}); if(!heads.length){ push(1,'全文',lines); return out; } const firstStart=heads[0][1]; if(lines.slice(0,firstStart).some(x=>x.trim())) push(0,'开篇',lines.slice(0,firstStart)); for(let i=0;i<heads.length;i++){ const [t,s]=heads[i]; const e=i+1<heads.length? heads[i+1][1] : lines.length; const body=lines.slice(s,e); if(!body.length||body[0].trim()!=t.trim()) body.unshift('',t); push(i+1,t,body); } return out; }
+      function makeUploadCard(title){ const esc=s=>String(s||'').replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); const wrap=document.createElement('div'); wrap.className='book-card'; wrap.innerHTML=`<div class="cover">${esc(title)}</div><div class="body"><div class="title">${esc(title)}</div><div class="meta" data-role="meta">解析中…</div><div class="chips" data-role="chips"><span class="chip">准备中</span></div></div>`; return wrap; }
+      async function uploadTxtFile(file){ if(!(window.API_AVAILABLE)) { alert('未连接服务器，无法上传'); return; } if(!(window.state && window.state.userName)) { if(!(await window.ensureLogin())) return; } const uploads=el('uploads'); const title=file.name.replace(/\.[^.]+$/,''); const card=makeUploadCard(title); uploads.appendChild(card); const metaEl=card.querySelector('[data-role="meta"]'); const chipsEl=card.querySelector('[data-role="chips"]'); try{ metaEl.textContent='读取文件…'; let text=await readFileAsText(file); if((text.match(/\ufffd/g)||[]).length>20){ text=await readFileAsText(file,'gb18030'); } metaEl.textContent='解析章节…'; const splits=splitTxt(text); const chapters=splits.map(c=>({ index:c.index, title:c.title, content:c.body })); chipsEl.innerHTML=`<span class="chip">章节数：${chapters.length}</span>`; metaEl.textContent='开始上传…'; const CHUNK=30; const total=chapters.length; let uploaded=0; const first=chapters.slice(0,CHUNK); const rest=chapters.slice(CHUNK); const r1=await fetch('/api/books',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title,chapters:first})}); const j1=await r1.json().catch(()=>null); if(!r1.ok||!j1||!j1.ok) throw new Error(j1?.error||'创建书籍失败'); const id=j1.id; uploaded+=first.length; chipsEl.innerHTML=`<span class="chip">已传：${uploaded}/${total}</span>`; for(let i=0;i<rest.length;i+=CHUNK){ const batch=rest.slice(i,i+CHUNK); const r=await fetch(`/api/books/${encodeURIComponent(id)}/chapters`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chapters:batch})}); const jj=await r.json().catch(()=>null); if(!r.ok||!jj||!jj.ok) throw new Error(jj?.error||'追加章节失败'); uploaded+=batch.length; chipsEl.innerHTML=`<span class="chip">已传：${uploaded}/${total}</span>`; } metaEl.innerHTML=`上传完成 · <a href="viewer.html?srv=${encodeURIComponent(id)}">前往阅读</a>`; if(window.loadServerBooks) await window.loadServerBooks(); if(window.renderGrid) window.renderGrid(); }catch(e){ metaEl.textContent='失败：'+String(e?.message||e); chipsEl.innerHTML=`<span class="chip">出错</span>`; } }
+      // EPUB 解析 + 直传
+      function td(u8){ try{ return new TextDecoder('utf-8',{fatal:false}).decode(u8);}catch{ return String.fromCharCode.apply(null,[...u8]); } }
+      function joinPath(base, rel){ if(!base) return rel; if(!rel) return base; if(base.endsWith('/')) base=base.slice(0,-1); return base + '/' + rel; }
+      function findZipEntry(zip, name){ const low=name.toLowerCase(); for(const k in zip){ if(k.toLowerCase()===low) return k; } return null; }
+      async function uploadEpubFile(file){ if(!(window.API_AVAILABLE)) { alert('未连接服务器，无法上传'); return; } if(!(window.state && window.state.userName)) { if(!(await window.ensureLogin())) return; } const uploads=el('uploads'); const titleNoExt=file.name.replace(/\.[^.]+$/,''); const card=makeUploadCard(titleNoExt); uploads.appendChild(card); const metaEl=card.querySelector('[data-role="meta"]'); const chipsEl=card.querySelector('[data-role="chips"]'); try{ metaEl.textContent='读取 EPUB…'; const buf=new Uint8Array(await file.arrayBuffer()); if(!window.fflate||!window.fflate.unzipSync) throw new Error('fflate 未加载'); const zip=window.fflate.unzipSync(buf); const cpath=findZipEntry(zip,'META-INF/container.xml'); if(!cpath) throw new Error('缺少 container.xml'); const containerXML=td(zip[cpath]); const m = containerXML.match(/full-path\s*=\s*"([^"]+)"/i); if(!m) throw new Error('未找到 OPF'); const opfPath=m[1]; const opfEntry=findZipEntry(zip, opfPath); if(!opfEntry) throw new Error('OPF 不存在'); const opfXML=td(zip[opfEntry]); const baseDir=opfEntry.split('/').slice(0,-1).join('/'); const idToHref={}; const hrefToType={}; opfXML.replace(/<item\s+[^>]*>/g,(it)=>{ const id=(it.match(/\sid\s*=\s*"([^"]+)"/i)||[])[1]; const href=(it.match(/\shref\s*=\s*"([^"]+)"/i)||[])[1]; const mt=(it.match(/\smedia-type\s*=\s*"([^"]+)"/i)||[])[1]; if(id&&href){ idToHref[id]=href; if(mt) hrefToType[href]=mt; } return it; }); const spine = []; opfXML.replace(/<itemref\s+[^>]*>/g,(it)=>{ const idref=(it.match(/\sidref\s*=\s*"([^"]+)"/i)||[])[1]; if(idref&&idToHref[idref]) spine.push(idToHref[idref]); return it; }); if(!spine.length) throw new Error('未找到章节'); metaEl.textContent='提取正文…'; const chapters=[]; let idx=1; for(const href of spine){ const p=joinPath(baseDir, href); const entry=findZipEntry(zip,p); if(!entry) continue; const html=td(zip[entry]); let text=html.replace(/<br\s*\/?>(\s*)/gi,'\n').replace(/<\/(p|div|h[1-6]|li|section|article)>/gi,'\n'); text=text.replace(/<script[\s\S]*?<\/script>/gi,'').replace(/<style[\s\S]*?<\/style>/gi,'').replace(/<[^>]+>/g,''); text=text.replace(/[\u00a0\t\r]+/g,' ').replace(/\n[ \t]*/g,'\n').replace(/\n{3,}/g,'\n\n').trim(); let titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i); let title = (titleMatch? titleMatch[1] : '').replace(/<[^>]+>/g,'').trim(); if(!title){ const firstLine=(text.split(/\n+/).find(s=>s.trim())||'').trim(); title=firstLine.slice(0,60)||('章节 '+idx); } chapters.push({ index: idx++, title, content: text }); }
+        chipsEl.innerHTML = `<span class="chip">章节数：${chapters.length}</span>`; metaEl.textContent='开始上传…'; const CHUNK=30; const total=chapters.length; let uploaded=0; const first=chapters.slice(0,CHUNK); const rest=chapters.slice(CHUNK); const r1=await fetch('/api/books',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({title:titleNoExt,chapters:first})}); const j1=await r1.json().catch(()=>null); if(!r1.ok||!j1||!j1.ok) throw new Error(j1?.error||'创建书籍失败'); const id=j1.id; uploaded+=first.length; chipsEl.innerHTML=`<span class=\"chip\">已传：${uploaded}/${total}</span>`; for(let i=0;i<rest.length;i+=CHUNK){ const batch=rest.slice(i,i+CHUNK); const r=await fetch(`/api/books/${encodeURIComponent(id)}/chapters`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chapters:batch})}); const jj=await r.json().catch(()=>null); if(!r.ok||!jj||!jj.ok) throw new Error(jj?.error||'追加章节失败'); uploaded+=batch.length; chipsEl.innerHTML=`<span class=\"chip\">已传：${uploaded}/${total}</span>`; } metaEl.innerHTML=`上传完成 · <a href=\"viewer.html?srv=${encodeURIComponent(id)}\">前往阅读</a>`; if(window.loadServerBooks) await window.loadServerBooks(); if(window.renderGrid) window.renderGrid(); } catch(e){ metaEl.textContent='失败：'+String(e?.message||e); chipsEl.innerHTML='<span class="chip">出错</span>'; }
+      }
+      document.addEventListener('DOMContentLoaded', ()=>{
+        // 文件选择：支持 TXT / EPUB（去除旧监听）
+        const input = el('file'); if(input){ const clone=input.cloneNode(true); clone.setAttribute('accept','.txt,.epub,text/plain,application/epub+zip'); input.replaceWith(clone); clone.addEventListener('change', async (e)=>{ const files=Array.from(e.target.files||[]); for(const f of files){ if(/\.txt$/i.test(f.name)) await uploadTxtFile(f); else if(/\.epub$/i.test(f.name)) await uploadEpubFile(f); else alert('当前仅支持 TXT/EPUB'); } e.target.value=''; }); }
+        // 文案修正
+        const tip = document.querySelector('#uploadModal .bd .small'); if(tip) tip.textContent = '选择文件后将直接解析并上传到服务器（不保存到本地）。';
+        const hdTitle = document.querySelector('#uploadModal .hd div'); if(hdTitle) hdTitle.textContent = '上传书籍（TXT/EPUB）';
+        // 顶部“账户/未登录”乱码修正
+        const un = document.getElementById('userName'); if(un && (!window.state || !window.state.userName)) un.textContent='未登录';
+      });
+    })();
+  </script>
 </body>
 </html>
 

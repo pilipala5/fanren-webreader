@@ -1,9 +1,9 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>灵阅书屋 · 阅读器（UTF-8）</title>
+  <title>鐏甸槄涔﹀眿 路 闃呰鍣紙UTF-8锛?/title>
   <style>
     :root { --bg:#f5f5f5; --ink:#1f1f1f; --accent:#6b7280; --paper:#fff; --content-size:19px; }
     html,body{height:100%;margin:0;color:var(--ink);background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans SC","Noto Serif SC",sans-serif}
@@ -24,11 +24,11 @@
   <script>
     const FS = { small: 16, medium: 19, large: 22 };
     const BOOKS = [
-      { key: '凡人修仙传', manifest: '凡人修仙传/manifest.json' },
-      { key: '凡人修仙传·仙界篇', manifest: '凡人修仙传·仙界篇/manifest.json' },
+      { key: '鍑′汉淇粰浼?, manifest: '鍑′汉淇粰浼?manifest.json' },
+      { key: '鍑′汉淇粰浼犅蜂粰鐣岀瘒', manifest: '鍑′汉淇粰浼犅蜂粰鐣岀瘒/manifest.json' },
     ];
 
-    // 模式：builtin（内置），server（服务器），upload（本地会话）
+    // 妯″紡锛歜uiltin锛堝唴缃級锛宻erver锛堟湇鍔″櫒锛夛紝upload锛堟湰鍦颁細璇濓級
     const state = {
       books:{}, manifests:{},
       mode:null, currentBook:null, serverId:null,
@@ -36,7 +36,7 @@
     };
     let API_AVAILABLE=false;
 
-    async function fetchJSON(url){ const r=await fetch(url); if(!r.ok) throw new Error('加载失败 '+url); return await r.json(); }
+    async function fetchJSON(url){ const r=await fetch(url); if(!r.ok) throw new Error('鍔犺浇澶辫触 '+url); return await r.json(); }
     async function fetchText(url, encoding='utf-8'){
       const enc=String(encoding||'utf-8').toLowerCase();
       if(enc==='utf-8'||enc==='utf8'){ const r=await fetch(url); if(!r.ok) throw 0; return await r.text(); }
@@ -52,13 +52,13 @@
 
     async function loadBooks(){ for(const b of BOOKS){ try{ const m=await fetchJSON(b.manifest); state.books[b.key]=m; state.manifests[b.key]=m; }catch{} } }
     function renderBookSelect(){ const sel=$('book'); sel.innerHTML=''; for(const k of Object.keys(state.books)){ const o=document.createElement('option'); o.value=k; o.textContent=k; sel.appendChild(o);} if(state.currentBook) sel.value=state.currentBook; }
-    function renderChapterSelect(){ const sel=$('chapter'); sel.innerHTML=''; const arr=getChapters(); for(const c of arr){ const o=document.createElement('option'); o.value=String(c.index); o.textContent=String(c.index).padStart(4,'0')+' · '+c.title; sel.appendChild(o);} sel.value=String(state.currentIndex); }
+    function renderChapterSelect(){ const sel=$('chapter'); sel.innerHTML=''; const arr=getChapters(); for(const c of arr){ const o=document.createElement('option'); o.value=String(c.index); o.textContent=String(c.index).padStart(4,'0')+' 路 '+c.title; sel.appendChild(o);} sel.value=String(state.currentIndex); }
     function getChapters(){
       if(state.mode==='builtin'){
         const m=state.books[state.currentBook]||{}; return Array.isArray(m.chapters)? m.chapters : [];
       } else if(state.mode==='server'){
         return Array.isArray(state._serverChapters)? state._serverChapters : [];
-      } else if(state.mode==='upload'){
+      } else if(false){
         return Array.isArray(state._uploadChapters)? state._uploadChapters : [];
       }
       return [];
@@ -68,25 +68,25 @@
     function deriveTitle(text, fallback){
       try{
         const lines=String(text||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
-        const re=/^(?:第[零一二三四五六七八九十百千万两0-9]+[章节回卷部集]\s*)?第?[零一二三四五六七八九十百千万两0-9]+[章节回][^\n\r]*$/;
+        const re=/^(?:绗琜闆朵竴浜屼笁鍥涗簲鍏竷鍏節鍗佺櫨鍗冧竾涓?-9]+[绔犺妭鍥炲嵎閮ㄩ泦]\s*)?绗?[闆朵竴浜屼笁鍥涗簲鍏竷鍏節鍗佺櫨鍗冧竾涓?-9]+[绔犺妭鍥瀅[^\n\r]*$/;
         for(const s of lines){ if(re.test(s)) return s; }
         if(lines[0]) return lines[0].slice(0,60);
       }catch{}
       return fallback;
     }
 
-    async function loadCurrent(){ const arr=getChapters(); const chap=arr.find(c=>c.index===state.currentIndex)||arr[0]; if(!chap) return; $('chapter').value=String(chap.index); $('title').textContent=chap.title; let text=''; try{ if(state.mode==='builtin'){ const m=state.books[state.currentBook]; const enc=(m&&m.encoding)||'utf-8'; text=await fetchText(state.currentBook+'/'+chap.file, enc); } else if(state.mode==='server'){ const url = `/api/books/${encodeURIComponent(state.serverId)}/chapter/${encodeURIComponent(chap.index)}`; const r=await fetch(url); if(!r.ok) throw 0; text=await r.text(); } else if(state.mode==='upload'){ const id=String(state._uploadId||''); text = sessionStorage.getItem('upload:'+id+':ch:'+chap.index)||''; } }catch{ text=''; }
-      const shownTitle = /�/.test(chap.title||'') ? deriveTitle(text, chap.title) : chap.title;
+    async function loadCurrent(){ const arr=getChapters(); const chap=arr.find(c=>c.index===state.currentIndex)||arr[0]; if(!chap) return; $('chapter').value=String(chap.index); $('title').textContent=chap.title; let text=''; try{ if(state.mode==='builtin'){ const m=state.books[state.currentBook]; const enc=(m&&m.encoding)||'utf-8'; text=await fetchText(state.currentBook+'/'+chap.file, enc); } else if(state.mode==='server'){ const url = `/api/books/${encodeURIComponent(state.serverId)}/chapter/${encodeURIComponent(chap.index)}`; const r=await fetch(url); if(!r.ok) throw 0; text=await r.text(); } else if(false){ const id=String(state._uploadId||''); text = sessionStorage.getItem('upload:'+id+':ch:'+chap.index)||''; } }catch{ text=''; }
+      const shownTitle = /锟?.test(chap.title||'') ? deriveTitle(text, chap.title) : chap.title;
       $('title').textContent = shownTitle;
-      try{ const sel=$('chapter'); const opt=[...sel.options].find(o=>o.value===String(chap.index)); if(opt){ opt.textContent=String(chap.index).padStart(4,'0')+' · '+shownTitle; } }catch{}
+      try{ const sel=$('chapter'); const opt=[...sel.options].find(o=>o.value===String(chap.index)); if(opt){ opt.textContent=String(chap.index).padStart(4,'0')+' 路 '+shownTitle; } }catch{}
       $('content').textContent=text; window.scrollTo({top:0,behavior:'instant'}); saveLast(); saveProgress(); updateNav();
     }
     async function gotoPrev(){ const idxs=getChapters().map(c=>c.index); const pos=idxs.indexOf(state.currentIndex); if(pos>0){ state.currentIndex=idxs[pos-1]; await loadCurrent(); } }
     async function gotoNext(){ const idxs=getChapters().map(c=>c.index); const pos=idxs.indexOf(state.currentIndex); if(pos>=0&&pos<idxs.length-1){ state.currentIndex=idxs[pos+1]; await loadCurrent(); } }
 
-    async function resolveFromParams(){ const p=new URLSearchParams(location.search); const book=p.get('book'); const srv=p.get('srv'); const up=p.get('upload'); if(book){ state.mode='builtin'; state.currentBook=book; return; } if(srv){ state.mode='server'; state.serverId=String(srv); state.currentBook='srv:'+state.serverId; return; } if(up){ state.mode='upload'; state._uploadId=String(up); state.currentBook='upload:'+state._uploadId; return; } try{ const last=JSON.parse(localStorage.getItem('novel:last')||'null'); if(last&&last.book){ state.currentBook=last.book; if(/^srv:/.test(last.book)){ state.mode='server'; state.serverId=last.book.replace(/^srv:/,''); } else if(/^upload:/.test(last.book)){ state.mode='upload'; state._uploadId=last.book.replace(/^upload:/,''); } else { state.mode='builtin'; } state.currentIndex=Number(last.index)||0; return; } }catch{} state.mode='builtin'; state.currentBook=BOOKS[0].key; state.currentIndex=0; }
+    async function resolveFromParams(){ const p=new URLSearchParams(location.search); const book=p.get('book'); const srv=p.get('srv'); const up=null; if(book){ state.mode='builtin'; state.currentBook=book; return; } if(srv){ state.mode='server'; state.serverId=String(srv); state.currentBook='srv:'+state.serverId; return; } /* upload disabled */ try{ const last=JSON.parse(localStorage.getItem('novel:last')||'null'); if(last&&last.book){ state.currentBook=last.book; if(/^srv:/.test(last.book)){ state.mode='server'; state.serverId=last.book.replace(/^srv:/,''); } else { state.mode='builtin'; } state.currentIndex=Number(last.index)||0; return; } }catch{} state.mode='builtin'; state.currentBook=BOOKS[0].key; state.currentIndex=0; }
 
-    async function loadChapters(){ if(state.mode==='builtin'){ const m = state.books[state.currentBook] || state.manifests[state.currentBook]; state.encoding = (m&&m.encoding)||'utf-8'; } else if(state.mode==='server'){ try{ const j=await fetchJSON(`/api/books/${encodeURIComponent(state.serverId)}`); state._serverChapters=(j.chapters||[]).map(c=>({index:c.index,title:c.title})); }catch{ state._serverChapters=[]; } } else if(state.mode==='upload'){ try{ const id=state._uploadId; const mani=JSON.parse(sessionStorage.getItem('upload:'+id+':manifest')||'null'); state._uploadChapters=Array.isArray(mani?.chapters)? mani.chapters.map(c=>({index:c.index,title:c.title})) : []; }catch{ state._uploadChapters=[]; } } if(!state.currentIndex){ const arr=getChapters(); state.currentIndex=arr[0]?.index||0; } }
+    async function loadChapters(){ if(state.mode==='builtin'){ const m = state.books[state.currentBook] || state.manifests[state.currentBook]; state.encoding = (m&&m.encoding)||'utf-8'; } else if(state.mode==='server'){ try{ const j=await fetchJSON(`/api/books/${encodeURIComponent(state.serverId)}`); state._serverChapters=(j.chapters||[]).map(c=>({index:c.index,title:c.title})); }catch{ state._serverChapters=[]; } } else if(false){ try{ const id=state._uploadId; const mani=JSON.parse(sessionStorage.getItem('upload:'+id+':manifest')||'null'); state._uploadChapters=Array.isArray(mani?.chapters)? mani.chapters.map(c=>({index:c.index,title:c.title})) : []; }catch{ state._uploadChapters=[]; } } if(!state.currentIndex){ const arr=getChapters(); state.currentIndex=arr[0]?.index||0; } }
 
     async function init(){ try{ const saved=localStorage.getItem('novel:fs'); if(saved&&FS[saved]) state.font=saved; }catch{} document.documentElement.style.setProperty('--content-size', FS[state.font]+'px'); await pingAPI(); await authMe(); await loadBooks(); await resolveFromParams(); renderBookSelect(); await loadChapters(); renderChapterSelect(); updateNav(); await loadCurrent(); $('book').addEventListener('change', async ()=>{ state.mode='builtin'; state.currentBook=$('book').value; state.currentIndex=0; await loadChapters(); renderChapterSelect(); updateNav(); await loadCurrent(); }); $('chapter').addEventListener('change', async ()=>{ state.currentIndex=Number($('chapter').value); await loadCurrent(); }); const fsSelect=$('fs'); fsSelect.value=state.font; fsSelect.addEventListener('change', ()=> setContentFont(fsSelect.value)); $('prev').addEventListener('click', gotoPrev); $('next').addEventListener('click', gotoNext); document.addEventListener('keydown', (e)=>{ if(e.altKey||e.ctrlKey||e.metaKey||e.shiftKey) return; const tag=(e.target&&e.target.tagName||'').toLowerCase(); if(tag==='input'||tag==='textarea'||e.isComposing) return; if(e.key==='ArrowLeft'){ e.preventDefault(); gotoPrev(); } else if(e.key==='ArrowRight'){ e.preventDefault(); gotoNext(); } }); }
     window.addEventListener('DOMContentLoaded', init);
@@ -95,31 +95,46 @@
 <body>
   <div class="wide">
     <header>
-      <h1>灵阅书屋 · 阅读器</h1>
-      <label>书本：<select id="book"></select></label>
-      <label style="flex:1">章节：<select id="chapter" style="width:100%"></select></label>
-      <label>字号：
-        <select id="fs">
-          <option value="small">小</option>
-          <option value="medium">中</option>
-          <option value="large">大</option>
+      <h1>鐏甸槄涔﹀眿 路 闃呰鍣?/h1>
+      <label>涔︽湰锛?select id="book"></select></label>
+      <label style="flex:1">绔犺妭锛?select id="chapter" style="width:100%"></select></label>
+      <label>瀛楀彿锛?        <select id="fs">
+          <option value="small">灏?/option>
+          <option value="medium">涓?/option>
+          <option value="large">澶?/option>
         </select>
       </label>
       <div class="spacer"></div>
-      <a href="/" style="text-decoration:none"><button>返回首页</button></a>
+      <a href="/" style="text-decoration:none"><button>杩斿洖棣栭〉</button></a>
     </header>
   </div>
   <div class="page">
-    <div class="notice" id="notice">提示：方向键 ←/→ 可快速翻章</div>
+    <div class="notice" id="notice">鎻愮ず锛氭柟鍚戦敭 鈫?鈫?鍙揩閫熺炕绔?/div>
     <div class="card">
       <div class="title" id="title"></div>
       <div class="content" id="content"></div>
-      <div class="footerbar"><span>快捷键：← 上一章 · → 下一章</span></div>
+      <div class="footerbar"><span>蹇嵎閿細鈫?涓婁竴绔?路 鈫?涓嬩竴绔?/span></div>
     </div>
     <div class="bottom-nav">
-      <button class="nav-btn" id="prev" title="上一章（←）">上一章</button>
-      <button class="nav-btn" id="next" title="下一章（→）">下一章</button>
+      <button class="nav-btn" id="prev" title="涓婁竴绔狅紙鈫愶級">涓婁竴绔?/button>
+      <button class="nav-btn" id="next" title="涓嬩竴绔狅紙鈫掞級">涓嬩竴绔?/button>
     </div>
   </div>
+<script>
+  // 禁用 upload 本地会话（保持与 viewer.html 一致）并修正文案
+  (function(){
+    const GOOD_BOOKS = [
+      { key: '凡人修仙传', manifest: '凡人修仙传/manifest.json' },
+      { key: '凡人修仙传·仙界篇', manifest: '凡人修仙传·仙界篇/manifest.json' },
+    ];
+    async function fetchJSON(url){ const r=await fetch(url); if(!r.ok) throw 0; return await r.json(); }
+    async function loadBooks(){ for(const b of GOOD_BOOKS){ try{ const m=await fetchJSON(b.manifest); state.books[b.key]=m; state.manifests[b.key]=m; }catch{} } }
+    async function resolveFromParams(){ const p=new URLSearchParams(location.search); const book=p.get('book'); const srv=p.get('srv'); if(book){ state.mode='builtin'; state.currentBook=book; return; } if(srv){ state.mode='server'; state.serverId=String(srv); state.currentBook='srv:'+state.serverId; return; } try{ const last=JSON.parse(localStorage.getItem('novel:last')||'null'); if(last&&last.book){ state.currentBook=last.book; if(/^srv:/.test(last.book)){ state.mode='server'; state.serverId=last.book.replace(/^srv:/,''); } else { state.mode='builtin'; } state.currentIndex=Number(last.index)||0; return; } }catch{} state.mode='builtin'; state.currentBook=GOOD_BOOKS[0].key; state.currentIndex=0; }
+    window.loadBooks = loadBooks; window.resolveFromParams = resolveFromParams;
+    document.addEventListener('DOMContentLoaded', ()=>{ try{ document.title = '灵阅书屋 · 阅读器（UTF-8）'; }catch{} });
+  })();
+</script>
 </body>
 </html>
+
+

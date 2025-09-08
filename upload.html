@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>上传书本</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <style>
+    .card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px;box-shadow:0 8px 30px rgba(0,0,0,.05)}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .col{display:grid;gap:10px}
+    input[type="text"]{appearance:none;border:1px solid var(--border);background:#fff;border-radius:8px;padding:8px 10px;color:var(--ink);font-size:14px;width:360px;max-width:90vw}
+    .muted{color:var(--muted);font-size:12px}
+    .list{max-height:260px;overflow:auto;border:1px dashed var(--border);border-radius:10px;padding:8px 10px;background:#fafafa}
+    .progress{height:8px;background:#eef2ff;border-radius:999px;overflow:hidden}
+    .progress>span{display:block;height:100%;background:var(--brand);width:0%}
+    .right{margin-left:auto}
+    .danger{color:#b91c1c}
+  </style>
+  <script>
+    const $ = (id)=>document.getElementById(id);
+    let API_AVAILABLE=false;
+    let state={ userName:null, file:null, text:'', encoding:'auto', chapters:[], title:'' };
+
+    async function pingAPI(){
+      const c=new AbortController(); setTimeout(()=>c.abort(),700);
+      try{ const r=await fetch('/api/health',{signal:c.signal}); API_AVAILABLE=r.ok; }catch{ API_AVAILABLE=false; }
+    }
+    async function authMe(){ if(!API_AVAILABLE) return null; try{ const r=await fetch('/api/auth/me'); if(!r.ok) return null; return await r.json(); }catch{return null;} }
+    async function authLogin(username,password){ if(!API_AVAILABLE) return { ok:false, error:'api disabled' }; const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})}); return await r.json(); }
+    async function ensureLogin(){ if(!API_AVAILABLE) return false; if(state.userName) return true; const u=prompt('用户名'); if(!u) return false; const p=prompt('密码（不少于6位）'); if(!p) return false; const r=await authLogin(u,p); if(r&&r.ok){ state.userName=u; renderAuth(); return true; } alert(r?.error||'登录失败'); return false; }
+    function renderAuth(){ const el=$('userName'); if(el) el.textContent=state.userName||'未登录'; }
+
+    function inferTitleFromFile(file){
+      const name=file?.name||''; if(!name) return '';
+      const base=name.replace(/\.[^.]+$/,'');
+      return base.slice(0,60);
+    }
+
+    async function readFileAsText(file, enc){
+      const buf = await file.arrayBuffer();
+      const tryDecode = (label)=>{ try{ const td=new TextDecoder(label,{fatal:true}); return td.decode(buf); }catch{ return null; } };
+      if(enc==='auto'){
+        return tryDecode('utf-8') ?? tryDecode('utf-8-sig') ?? tryDecode('gbk') ?? tryDecode('gb18030') ?? new TextDecoder('utf-8').decode(buf);
+      }
+      const label = (enc==='gbk'||enc==='gb2312'||enc==='gb18030')? 'gbk' : enc;
+      return tryDecode(label) ?? new TextDecoder(label,{fatal:false}).decode(buf);
+    }
+
+    function splitChapters(text){
+      // 统一换行
+      text = String(text||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+      const lines = text.split('\n');
+      // 章节标题模式：包含“第X章/回/节/篇”，可选卷/部前缀；以及“某某外传”
+      const pats = [
+        /^(?:(?:第[〇零一二三四五六七八九十百千万0-9两]+(?:卷|部|集|回|编|册)?)?\s*)?第[〇零一二三四五六七八九十百千万0-9两]+(?:章|回|节|篇)[^\n\r]*$/,
+        /^.{1,40}?外传$/,
+      ];
+      const isHeading = (s)=>{ const t=s.trim(); if(!t) return false; return pats.some(p=>p.test(t)); };
+
+      const hits=[]; for(let i=0;i<lines.length;i++){ if(isHeading(lines[i])) hits.push({i,title:lines[i].trim()}); }
+
+      const chapters=[];
+      const pushChapter=(idx,title,bodyLines)=>{
+        const ttl = String(title||'').trim()||`章节 ${idx}`;
+        let content = bodyLines.join('\n');
+        // 确保标题置顶且不重复
+        const first = (bodyLines[0]||'').trim();
+        if(first !== ttl){ content = ttl + '\n\n' + content; }
+        chapters.push({ index: idx, title: ttl, content: content.replace(/\n+$/,'') });
+      };
+
+      if(hits.length===0){
+        // 无明显分章，整本当作一个章节
+        pushChapter(1, '全文', lines);
+        return chapters;
+      }
+
+      // 前言/引子
+      if(hits[0].i>0){
+        const pre = lines.slice(0,hits[0].i);
+        if(pre.some(s=>s.trim())) pushChapter(0, '开篇', pre);
+      }
+      for(let k=0;k<hits.length;k++){
+        const start = hits[k].i;
+        const end = (k+1<hits.length)? hits[k+1].i : lines.length;
+        const body = lines.slice(start, end);
+        pushChapter(chapters.length? chapters[chapters.length-1].index+1 : (hits[0].i>0? 1 : 1), hits[k].title, body);
+      }
+      // 重新规范 index 从 0/1 递增
+      for(let i=0;i<chapters.length;i++){ chapters[i].index = i + (chapters[0].title==='开篇'? 0 : 1); }
+      return chapters;
+    }
+
+    function renderPreview(){
+      const list=$('previewList');
+      const info=$('info');
+      list.innerHTML='';
+      if(!state.chapters.length){ info.innerHTML='<span class="danger">未解析到章节，请检查编码或文本内容。</span>'; return; }
+      info.textContent = `共 ${state.chapters.length} 章（仅展示前 20 条）`;
+      const n=Math.min(20,state.chapters.length);
+      for(let i=0;i<n;i++){
+        const ch=state.chapters[i];
+        const div=document.createElement('div');
+        div.className='row';
+        const t=document.createElement('div'); t.textContent=`#${ch.index} ${ch.title}`; div.appendChild(t);
+        const s=document.createElement('div'); s.className='muted right'; s.textContent=`${ch.content.length} 字`; div.appendChild(s);
+        list.appendChild(div);
+      }
+    }
+
+    async function handleParse(){
+      if(!state.file){ alert('请先选择文件'); return; }
+      $('btnParse').disabled=true; $('btnUpload').disabled=true; $('info').textContent='解析中…'; $('previewList').innerHTML='';
+      try{
+        state.encoding = $('enc').value||'auto';
+        state.text = await readFileAsText(state.file, state.encoding);
+        if(!$('title').value){ $('title').value = inferTitleFromFile(state.file); }
+        state.title = $('title').value.trim();
+        state.chapters = splitChapters(state.text);
+        renderPreview();
+        $('btnUpload').disabled = state.chapters.length===0;
+      }catch(e){ alert('解析失败: '+e); }
+      finally{ $('btnParse').disabled=false; }
+    }
+
+    async function uploadInBatches(bookId, chapters, batchSize=30){
+      let sent=0; $('progWrap').classList.remove('hidden');
+      for(let i=0;i<chapters.length;i+=batchSize){
+        const slice=chapters.slice(i, i+batchSize);
+        const r = await fetch(`/api/books/${encodeURIComponent(bookId)}/chapters`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({chapters:slice})});
+        const j = await r.json();
+        if(!(r.ok && j && j.ok)) throw new Error(j?.error||('上传失败 @'+i));
+        sent += slice.length; const pct=Math.round(100*sent/chapters.length);
+        $('prog').style.width = pct+'%'; $('progText').textContent = `已上传 ${sent}/${chapters.length}`;
+      }
+    }
+
+    async function handleUpload(){
+      if(!API_AVAILABLE){ alert('未连接 API，无法上传'); return; }
+      if(!await ensureLogin()) return;
+      const title = String($('title').value||'').trim(); if(!title){ alert('请填写书名'); return; }
+      if(!state.chapters.length){ alert('请先解析文件'); return; }
+      $('btnUpload').disabled=true;
+      try{
+        // 先创建书（公开）
+        const r1 = await fetch('/api/books',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ title })});
+        const j1 = await r1.json();
+        if(!(r1.ok && j1 && j1.ok && j1.id)) throw new Error(j1?.error||'创建书籍失败');
+        const id = j1.id;
+        // 分批上传章节
+        await uploadInBatches(id, state.chapters);
+        $('done').innerHTML = `发布完成！<a href="viewer.html?srv=${encodeURIComponent(id)}">点击阅读</a>`;
+        $('done').classList.remove('hidden');
+      }catch(e){ alert(String(e)); }
+      finally{ $('btnUpload').disabled=false; }
+    }
+
+    function bind(){
+      $('file').addEventListener('change',(e)=>{ state.file=e.target.files?.[0]||null; $('btnParse').disabled=!state.file; $('btnUpload').disabled=true; $('previewList').innerHTML=''; $('info').textContent=''; $('done').classList.add('hidden'); $('progWrap').classList.add('hidden'); $('prog').style.width='0%'; });
+      $('btnParse').addEventListener('click', handleParse);
+      $('btnUpload').addEventListener('click', handleUpload);
+    }
+
+    async function init(){
+      await pingAPI();
+      const me = await authMe(); if(me&&me.ok&&me.loggedIn) state.userName=me.username; renderAuth();
+      bind();
+    }
+    window.addEventListener('DOMContentLoaded', init);
+  </script>
+</head>
+<body>
+  <div class="topbar">
+    <div class="container row">
+      <a class="btn" href="/">← 返回首页</a>
+      <div class="brand">上传书本</div>
+      <div class="spacer"></div>
+      <span class="small">账号：</span><strong id="userName" class="small">未登录</strong>
+    </div>
+  </div>
+
+  <div class="container col" style="gap:14px">
+    <div class="card col">
+      <div class="row">
+        <label class="inline">选择文件：<input id="file" type="file" accept=".txt,text/plain" /></label>
+        <label class="inline">编码：
+          <select id="enc">
+            <option value="auto" selected>自动</option>
+            <option value="utf-8">UTF-8</option>
+            <option value="gbk">GBK/GB2312</option>
+            <option value="gb18030">GB18030（采用 GBK 解码）</option>
+          </select>
+        </label>
+      </div>
+      <label>书名：<input id="title" type="text" placeholder="可留空以使用文件名" /></label>
+      <div class="row">
+        <button id="btnParse" class="btn" disabled>解析/预览</button>
+        <button id="btnUpload" class="btn btn-primary" disabled>确认发布</button>
+        <span class="muted">流程：先在本地解析预览 → 确认发布（公开，所有用户可见）</span>
+      </div>
+    </div>
+
+    <div class="card col">
+      <div id="info" class="muted"></div>
+      <div id="previewList" class="list"></div>
+      <div id="progWrap" class="progress hidden"><span id="prog"></span></div>
+      <div id="progText" class="muted"></div>
+      <div id="done" class="hidden"></div>
+    </div>
+  </div>
+
+  <div class="container footer">
+    <div>QQ: 407292550 · WeChat: gdb1314_ · Email: yuhan.huang@whu.edu.cn</div>
+  </div>
+</body>
+</html>

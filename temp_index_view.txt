@@ -84,7 +84,6 @@
     <div class="container row">
       <div class="brand">灵阅书屋</div>
       <div class="spacer"></div>
-      <a class="btn" href="upload.html">上传</a>
       <a class="btn" href="favorites.html">收藏</a>
       <span class="small">账户：</span><strong id="userName" class="small">未登录</strong>
       <button class="btn" id="btnLogin">登录/注册</button>

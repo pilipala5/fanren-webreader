@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
@@ -6,7 +6,7 @@
   <title>灵阅书屋 · 首页</title>
   <link rel="stylesheet" href="assets/style.css" />
   <script>
-    // 内置书籍列表
+    // 内置书籍列表（静态清单）
     const BOOKS = [
       { key: '凡人修仙传', manifest: '凡人修仙传/manifest.json', source: 'builtin' },
       { key: '凡人修仙传·仙界篇', manifest: '凡人修仙传·仙界篇/manifest.json', source: 'builtin' },
@@ -14,56 +14,83 @@
 
     let API_AVAILABLE = false;
     const state = { books: {}, serverBooks: [], progress: {}, userName: null };
+    const favs = new Set();
 
-    function el(id){ return document.getElementById(id); }
+    const el = (id)=>document.getElementById(id);
+    const escapeHtml = (s)=> String(s||'').replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+
     async function pingAPI(){ const c=new AbortController(); setTimeout(()=>c.abort(),600); try{ const r=await fetch('/api/health',{signal:c.signal}); API_AVAILABLE=r.ok; }catch{ API_AVAILABLE=false; } }
-    async function fetchJSON(url){ const r=await fetch(url); if(!r.ok) throw new Error('加载失败'); return await r.json(); }
+    async function fetchJSON(url){ const r=await fetch(url); if(!r.ok) throw new Error('加载失败: '+url); return await r.json(); }
 
+    // ---- Auth helpers ----
+    async function authMe(){ if(!API_AVAILABLE) return null; try{ const r=await fetch('/api/auth/me'); if(!r.ok) return null; return await r.json(); }catch{return null;} }
+    async function authLogin(username,password){ if(!API_AVAILABLE) return { ok:false, error:'api disabled' }; const r=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,password})}); return await r.json(); }
+    async function authLogout(){ if(!API_AVAILABLE) return; try{ await fetch('/api/auth/logout',{method:'POST'}); }catch{} }
+    function renderAuth(){ const u=el('userName'); const btnIn=el('btnLogin'); const btnOut=el('btnLogout'); if(!u||!btnIn||!btnOut) return; if(state.userName){ u.textContent=state.userName; btnIn.style.display='none'; btnOut.style.display='inline-block'; } else { u.textContent='未登录'; btnIn.style.display='inline-block'; btnOut.style.display='none'; } }
+    async function ensureLogin(){ if(!API_AVAILABLE) return false; if(state.userName) return true; const u=prompt('用户名'); if(!u) return false; const p=prompt('密码（≥6位）'); if(!p) return false; const r=await authLogin(u,p); if(r&&r.ok){ state.userName=u; renderAuth(); return true; } alert(r?.error||'登录失败'); return false; }
+
+    // ---- Data loaders ----
     async function loadBuiltins(){ for(const b of BOOKS){ try{ state.books[b.key]=await fetchJSON(b.manifest); }catch{} } }
     async function loadServerBooks(){ if(!API_AVAILABLE) return; try{ const r=await fetch('/api/books'); if(!r.ok) return; const j=await r.json(); if(j&&j.ok) state.serverBooks=j.items||[]; }catch{} }
-    async function loadProgress(){ if(API_AVAILABLE){ try{ const r=await fetch('/api/progress'); if(r.ok){ const j=await r.json(); if(j.ok) state.progress=j.items||{}; }}catch{} } }
+    async function loadProgress(){ if(!API_AVAILABLE) return; try{ const r=await fetch('/api/progress'); if(!r.ok) return; const j=await r.json(); if(j&&j.ok) state.progress=j.items||{}; }catch{} }
+    async function favLoad(){ if(!API_AVAILABLE) return; try{ const r=await fetch('/api/favorites'); if(!r.ok) return; const j=await r.json(); if(j&&j.ok){ favs.clear(); for(const it of (j.items||[])) favs.add(String(it.book)); } }catch{} }
+    async function favToggle(bookKey){ if(!API_AVAILABLE){ alert('未连接服务器'); return; } if(!state.userName){ if(!await ensureLogin()) return; } const action=favs.has(bookKey)? 'remove' : 'add'; try{ const r=await fetch('/api/favorites',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action, book:bookKey})}); const j=await r.json(); if(r.ok&&j.ok){ if(action==='add') favs.add(bookKey); else favs.delete(bookKey); renderGrid(); } }catch{} }
 
-    function bookCard({ title, subtitle, tag, href, pos, cover }){
-      const d=document.createElement('a'); d.className='book-card link'; d.href=href; d.innerHTML=
-        `${cover? `<div class="cover"><img alt="cover" src="${cover}"/></div>` : `<div class=\"cover\">${escapeHtml(title)}</div>`}
-         <div class="body">
-           <div class="title">${escapeHtml(title)}</div>
-           <div class="meta">${escapeHtml(subtitle||'')}</div>
-           <div class="chips"><span class="chip">${escapeHtml(tag||'')}</span>${pos? `<span class=\"chip\">已读至第 ${pos} 章</span>`:''}</div>
-         </div>`;
-      return d;
+    // ---- UI helpers ----
+    function bookCard({ key, title, subtitle, tag, href, pos, cover }){
+      const wrap=document.createElement('div'); wrap.className='book-card';
+      const a=document.createElement('a'); a.className='link'; a.href=href; a.style.textDecoration='none';
+      a.innerHTML = `
+        ${cover? `<div class="cover"><img alt="cover" src="${cover}"/></div>` : `<div class="cover">${escapeHtml(title)}</div>`}
+        <div class="body">
+          <div class="title">${escapeHtml(title)}</div>
+          <div class="meta">${escapeHtml(subtitle||'')}</div>
+          <div class="chips"><span class="chip">${escapeHtml(tag||'')}</span>${(Number.isFinite(pos)&&pos>0)? `<span class="chip">已读至第 ${pos} 章</span>`:''}</div>
+        </div>`;
+      wrap.appendChild(a);
+      const fav=document.createElement('button'); fav.type='button'; fav.className='fav-btn'+(favs.has(String(key))?' active':''); fav.innerHTML='<span>♥</span>';
+      fav.addEventListener('click', async (e)=>{ e.preventDefault(); e.stopPropagation(); await favToggle(String(key)); });
+      wrap.appendChild(fav);
+      return wrap;
     }
-    function escapeHtml(s){ return String(s||'').replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c])); }
 
     function renderGrid(){
       const grid = el('bookGrid'); if(!grid) return; grid.innerHTML='';
       // 内置
-      for(const b of BOOKS){ const m=state.books[b.key]; if(!m) continue; const total=(m.chapters||[]).length; const k=b.key; const idx=Number(state.progress[k]||localStorage.getItem('novel:p:'+k)||0)||0; grid.appendChild(bookCard({
-        title:b.key, subtitle:`章节数：${total}`, tag:'内置', href:'viewer.html?book='+encodeURIComponent(k), pos: idx, cover:null
-      })); }
+      for(const b of BOOKS){ const m=state.books[b.key]; if(!m) continue; const total=(m.chapters||[]).length; const k=b.key; const idx=Number(state.progress[k]||localStorage.getItem('novel:p:'+k)||0)||0; grid.appendChild(bookCard({ key:k, title:b.key, subtitle:`章节数 ${total}`, tag:'内置', href:'viewer.html?book='+encodeURIComponent(k), pos: idx, cover: null })); }
       // 服务器
-      for(const sb of state.serverBooks){ const k='srv:'+sb.id; const total=sb.chapters||0; const idx=Number(state.progress[k]||localStorage.getItem('novel:p:'+k)||0)||0; grid.appendChild(bookCard({
-        title:sb.title, subtitle:`章节数：${total} · 上传者：${sb.uploader}`, tag:'服务器', href:'viewer.html?srv='+encodeURIComponent(sb.id), pos: idx, cover: sb.cover||null
-      })); }
+      for(const sb of state.serverBooks){ const k='srv:'+sb.id; const total=sb.chapters||0; const idx=Number(state.progress[k]||localStorage.getItem('novel:p:'+k)||0)||0; grid.appendChild(bookCard({ key:k, title:sb.title, subtitle:`章节数 ${total} · 上传者：${sb.uploader}`, tag:'服务器', href:'viewer.html?srv='+encodeURIComponent(sb.id), pos: idx, cover: sb.cover||null })); }
     }
 
     async function init(){
       await pingAPI();
+      const me=await authMe(); if(me&&me.ok&&me.loggedIn) state.userName=me.username; renderAuth();
       await loadBuiltins();
       await loadServerBooks();
       await loadProgress();
+      if(API_AVAILABLE) await favLoad();
       renderGrid();
+      const btnIn=el('btnLogin'), btnOut=el('btnLogout');
+      if(btnIn) btnIn.addEventListener('click', async ()=>{ await ensureLogin(); if(API_AVAILABLE) await favLoad(); renderGrid(); });
+      if(btnOut) btnOut.addEventListener('click', async ()=>{ await authLogout(); state.userName=null; renderAuth(); });
     }
     document.addEventListener('DOMContentLoaded', init);
   </script>
+  <style>
+    /* ensure cover images fill card nicely */
+    .book-card .cover img{width:100%;height:100%;object-fit:cover;display:block}
+  </style>
 </head>
 <body>
   <div class="topbar">
     <div class="container row">
       <div class="brand">灵阅书屋</div>
       <div class="spacer"></div>
+      <a class="btn" href="upload.html">上传</a>
       <a class="btn" href="favorites.html">收藏</a>
-      <button class="btn" id="btnUpload" onclick="location.href='upload.html'">上传</button>
+      <span class="small">账户：</span><strong id="userName" class="small">未登录</strong>
+      <button class="btn" id="btnLogin">登录/注册</button>
+      <button class="btn" id="btnLogout" style="display:none">退出</button>
     </div>
   </div>
   <div class="container">
@@ -74,3 +101,4 @@
   </div>
 </body>
 </html>
+

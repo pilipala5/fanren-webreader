@@ -35,7 +35,7 @@ export async function onRequestGet({ request, env }) {
   const offset = Math.max(0, Number.parseInt(url.searchParams.get('offset') || '0', 10));
   try {
     const { results } = await env.DB
-      .prepare(`SELECT b.id, b.title, b.uploader, b.visibility, b.created_at, COUNT(c.idx) AS chapters
+      .prepare(`SELECT b.id, b.title, b.uploader, b.visibility, b.created_at, b.cover, COUNT(c.idx) AS chapters
                 FROM books b LEFT JOIN chapters c ON c.book_id = b.id
                 WHERE b.visibility = 'public'
                 GROUP BY b.id
@@ -49,6 +49,7 @@ export async function onRequestGet({ request, env }) {
       uploader: r.uploader,
       chapters: Number(r.chapters || 0),
       created_at: Number(r.created_at),
+      cover: r.cover || null,
     })) });
   } catch (e) {
     return json(request, { ok: false, error: String(e) }, { status: 500 });
@@ -80,6 +81,7 @@ export async function onRequestPost({ request, env }) {
       return json(request, { ok: false, error: 'failed to get new book id' }, { status: 500 });
     }
     const chapters = Array.isArray(data?.chapters) ? data.chapters : [];
+    const cover = typeof data?.cover === 'string' ? data.cover : '';
     if (chapters.length) {
       const stmts = [];
       for (const ch of chapters) {
@@ -90,6 +92,9 @@ export async function onRequestPost({ request, env }) {
         stmts.push(env.DB.prepare('INSERT OR REPLACE INTO chapters(book_id, idx, title, content) VALUES(?,?,?,?)').bind(id, idx, tt, ct));
       }
       if (stmts.length) await env.DB.batch(stmts);
+    }
+    if (cover && cover.length <= 2_000_000) { // up to ~2MB base64 data URL
+      try { await env.DB.prepare('UPDATE books SET cover = ? WHERE id = ?').bind(cover, id).run(); } catch {}
     }
     return json(request, { ok: true, id });
   } catch (e) {

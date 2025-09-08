@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS books (
   title TEXT NOT NULL,
   uploader TEXT NOT NULL,
   visibility TEXT NOT NULL DEFAULT 'public',
+  -- Optional base64 data URL thumbnail (small image) for cover
+  cover TEXT,
   created_at REAL NOT NULL
 );
 

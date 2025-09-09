@@ -6,7 +6,7 @@
   <title>灵阅书屋 · 阅读器</title>
   <link rel="stylesheet" href="/assets/style.css" />
   <style>
-    /* 原有样式（保持） */
+    /* —— 保留你原有的基础样式 —— */
     .reader-wrap{display:grid;gap:12px}
     .reader-header{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
     .reader-content{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.05)}
@@ -16,36 +16,37 @@
     :root{ --content-size: 19px; }
     #content{ white-space: pre-wrap; line-height: 1.9; font-size: var(--content-size); }
 
-    /* ======= 追加：移动端显示兜底（不影响原逻辑） ======= */
-    html, body { overflow-x: hidden; }                                 /* 防横向滚动条 */
-    #content{ overflow-wrap:anywhere; word-break:break-word; }          /* 强制断行 */
+    /* —— 轻量兜底：防横向滚动 / 强制断行 —— */
+    html, body { overflow-x: hidden; }
+    #content{ overflow-wrap:anywhere; word-break:break-word; }
 
-    /* —— 调整：阅读区与底部同宽（按容器自适应） —— */
-    .reader-content{ width:100%; max-width:none; margin-inline:auto; }  /* 取消 72ch 限制 */
+    /* —— 关键点：阅读区与底部按钮同宽（随容器自适应） —— */
+    .reader-wrap > .reader-content,
+    .reader-wrap > .bottom-nav{
+      width:100% !important;       /* 保证两者等宽 */
+      max-width: none !important;  /* 避免被外部更高优先级规则限制 */
+      margin-inline: auto;
+    }
 
-    .bottom-nav{ flex-wrap:wrap; }                                      /* 窄屏按钮可换行 */
+    /* 媒体元素不撑宽 */
     .reader-content img,
     .reader-content video,
     .reader-content table,
     .reader-content pre,
-    .reader-content code{ max-width:100%; height:auto; overflow:auto; } /* 媒体不撑宽 */
+    .reader-content code{ max-width:100%; height:auto; overflow:auto; }
 
+    /* 窄屏按钮可换行 */
+    .bottom-nav{ flex-wrap:wrap; }
+
+    /* 极窄屏：微调默认字号 */
     @media (max-width:380px){
-      :root{ --content-size:17px; }                                     /* 极窄屏微降字号 */
+      :root{ --content-size:17px; }
     }
 
-    /* ======= 新增：顶部章节工具条 ======= */
-    .chapter-bar{
-      display:flex; gap:12px; align-items:center; flex-wrap:wrap;
-      padding:10px 0;               /* 轻量留白 */
-    }
-    .chapter-bar label{ display:flex; align-items:center; gap:8px; }
-    .chapter-bar select{ max-width:100%; }
-
-    /* 可选：让章节工具条在滚动时吸顶（若不想吸顶可删掉这段） */
-    @media (min-width:768px){
-      .chapter-bar{ position:sticky; top:0; background:var(--bg,#fff); z-index:5; }
-    }
+    /* —— 顶栏右侧工具区（章节 + 字号） —— */
+    .tools{ display:flex; align-items:center; gap:12px; }
+    .tools label{ display:flex; align-items:center; gap:8px; }
+    .tools select{ max-width:100%; }
   </style>
 
   <script>
@@ -59,7 +60,7 @@
     const state = {
       mode: null,           // 'builtin' | 'server'
       bookKey: null,        // builtin:书名 | server:'srv:<id>'
-      serverId: null,       // 服务器书籍 id（数字字符串）
+      serverId: null,
       chapters: [],
       currentIndex: 0,
       font: 'medium',
@@ -145,13 +146,11 @@
       return dec.decode(buf);
     }
 
-    // 渲染前：去掉正文开头重复标题 & 收敛空行（兼容旧数据）
     function normalizeForRender(title, text){
       let lines = String(text||'').replace(/\r\n?/g,'\n').split('\n');
       const t = norm(title);
       for(let k=0;k<2;k++){ if(lines.length && norm(lines[0])===t) lines.shift(); }
-      let s = lines.join('\n').replace(/\n{3,}/g,'\n\n').replace(/^\n+/, '');
-      return s;
+      return lines.join('\n').replace(/\n{3,}/g,'\n\n').replace(/^\n+/, '');
     }
 
     /* ===================== 初始化 & 章节装载 ===================== */
@@ -288,27 +287,24 @@
       <a class="btn" href="/">← 返回首页</a>
       <div class="brand">灵阅书屋</div>
       <div class="spacer"></div>
-      <label>字号：
-        <select id="fs">
-          <option value="small">小</option>
-          <option value="medium" selected>中</option>
-          <option value="large">大</option>
-        </select>
-      </label>
-    </div>
-
-    <!-- 新增：章节工具条（放到顶部） -->
-    <div class="container chapter-bar">
-      <label>章节：
-        <select id="chapter"></select>
-      </label>
+      <!-- 右侧工具区：章节 + 字号（并排、随宽度自适应，窄屏会自动换行） -->
+      <div class="tools">
+        <label>章节：
+          <select id="chapter"></select>
+        </label>
+        <label>字号：
+          <select id="fs">
+            <option value="small">小</option>
+            <option value="medium" selected>中</option>
+            <option value="large">大</option>
+          </select>
+        </label>
+      </div>
     </div>
   </div>
 
   <!-- 主体 -->
   <div class="container reader-wrap">
-    <!-- 删除原来的 reader-header（避免重复显示） -->
-
     <div class="reader-content">
       <div class="reader-title" id="title"></div>
       <div id="content"></div>

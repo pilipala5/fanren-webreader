@@ -6,6 +6,7 @@
   <title>灵阅书屋 · 阅读器</title>
   <link rel="stylesheet" href="/assets/style.css" />
   <style>
+    /* 原有样式（保持） */
     .reader-wrap{display:grid;gap:12px}
     .reader-header{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
     .reader-content{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.05)}
@@ -16,10 +17,13 @@
     #content{ white-space: pre-wrap; line-height: 1.9; font-size: var(--content-size); }
 
     /* ======= 追加：移动端显示兜底（不影响原逻辑） ======= */
-    html, body { overflow-x: hidden; }                 /* 防横向滚动条 */
-    #content{ overflow-wrap:anywhere; word-break:break-word; } /* 强制断行 */
-    .reader-content{ width:100%; max-width:72ch; margin-inline:auto; } /* 可读行宽 */
-    .bottom-nav{ flex-wrap:wrap; }                     /* 窄屏按钮可换行 */
+    html, body { overflow-x: hidden; }                                 /* 防横向滚动条 */
+    #content{ overflow-wrap:anywhere; word-break:break-word; }          /* 强制断行 */
+
+    /* —— 调整：阅读区与底部同宽（按容器自适应） —— */
+    .reader-content{ width:100%; max-width:none; margin-inline:auto; }  /* 取消 72ch 限制 */
+
+    .bottom-nav{ flex-wrap:wrap; }                                      /* 窄屏按钮可换行 */
     .reader-content img,
     .reader-content video,
     .reader-content table,
@@ -27,9 +31,23 @@
     .reader-content code{ max-width:100%; height:auto; overflow:auto; } /* 媒体不撑宽 */
 
     @media (max-width:380px){
-      :root{ --content-size:17px; }                    /* 极窄屏细微降字号 */
+      :root{ --content-size:17px; }                                     /* 极窄屏微降字号 */
+    }
+
+    /* ======= 新增：顶部章节工具条 ======= */
+    .chapter-bar{
+      display:flex; gap:12px; align-items:center; flex-wrap:wrap;
+      padding:10px 0;               /* 轻量留白 */
+    }
+    .chapter-bar label{ display:flex; align-items:center; gap:8px; }
+    .chapter-bar select{ max-width:100%; }
+
+    /* 可选：让章节工具条在滚动时吸顶（若不想吸顶可删掉这段） */
+    @media (min-width:768px){
+      .chapter-bar{ position:sticky; top:0; background:var(--bg,#fff); z-index:5; }
     }
   </style>
+
   <script>
     /* ===================== 基础状态 ===================== */
     const FS = { small: 16, medium: 19, large: 22 };
@@ -91,7 +109,6 @@
       }catch{}
     }
     async function loadProgress(){
-      // 1) 优先服务端
       if(state.api){
         try{
           const r = await fetch('/api/progress?book='+encodeURIComponent(state.bookKey));
@@ -104,7 +121,6 @@
           }
         }catch{}
       }
-      // 2) 本地
       try{
         const s = localStorage.getItem('novel:p:'+state.bookKey);
         if(s!==null && Number.isFinite(+s) && +s>0){ state.currentIndex = +s; }
@@ -149,12 +165,14 @@
       const srv = p.get('srv');
       if (book) { state.mode='builtin'; state.bookKey=book; return; }
       if (srv)  { state.mode='server'; state.serverId=String(srv); state.bookKey='srv:'+state.serverId; return; }
-      // fallback: 最近阅读
       try{
         const last = JSON.parse(localStorage.getItem('novel:last')||'null');
-        if(last&&last.book){ state.bookKey=last.book; if(/^srv:\d+/.test(last.book)){ state.mode='server'; state.serverId=last.book.replace(/^srv:/,''); } else { state.mode='builtin'; } state.currentIndex = Number(last.index)||0; return; }
+        if(last&&last.book){
+          state.bookKey=last.book;
+          if(/^srv:\d+/.test(last.book)){ state.mode='server'; state.serverId=last.book.replace(/^srv:/,''); } else { state.mode='builtin'; }
+          state.currentIndex = Number(last.index)||0; return;
+        }
       }catch{}
-      // 再不行就默认第一本内置书
       state.mode='builtin'; state.bookKey=BUILTINS[0].key;
     }
 
@@ -208,16 +226,13 @@
 
       $('content').textContent = normalizeForRender(chap.title, text);
 
-      // 边界按钮状态
       $('prev').disabled = (state.currentIndex <= (state.chapters[0]?.index || 1));
       $('next').disabled = (state.currentIndex >= (state.chapters[state.chapters.length-1]?.index || state.currentIndex));
 
-      // 写入进度（本地 + 服务器 + 最近阅读）
       saveProgressLocal();
       saveProgressServer();
       saveLast();
 
-      // 回到顶部（修复“翻章后不在顶部”）
       if(document.scrollingElement){
         document.scrollingElement.scrollTo({top:0, behavior:'instant'});
       }else{
@@ -242,7 +257,6 @@
       $('chapter').addEventListener('change', (e)=>{ state.currentIndex = Number(e.target.value)||state.currentIndex; loadAndRender(); });
       $('fs').addEventListener('change', (e)=> setFont(e.target.value));
 
-      // 键盘左右翻章
       window.addEventListener('keydown', (e)=>{
         if(e.target && /input|textarea|select/i.test(e.target.tagName)) return;
         if(e.key==='ArrowLeft') goto(-1);
@@ -252,7 +266,6 @@
 
     /* ===================== 启动流程 ===================== */
     async function init(){
-      // 字号偏好
       try{ setFont(localStorage.getItem('novel:fs')||'medium'); }catch{ setFont('medium'); }
 
       await pingAPI();
@@ -260,7 +273,6 @@
       await loadBuiltinsManifests();
       await resolveFromParams();
       await loadChapters();
-      // 读取进度（服务端优先，本地兜底）
       await loadProgress();
       buildChapterSelect();
       bind();
@@ -270,6 +282,7 @@
   </script>
 </head>
 <body>
+  <!-- 顶部栏 -->
   <div class="topbar">
     <div class="container row">
       <a class="btn" href="/">← 返回首页</a>
@@ -283,14 +296,18 @@
         </select>
       </label>
     </div>
-  </div>
 
-  <div class="container reader-wrap">
-    <div class="reader-header">
+    <!-- 新增：章节工具条（放到顶部） -->
+    <div class="container chapter-bar">
       <label>章节：
         <select id="chapter"></select>
       </label>
     </div>
+  </div>
+
+  <!-- 主体 -->
+  <div class="container reader-wrap">
+    <!-- 删除原来的 reader-header（避免重复显示） -->
 
     <div class="reader-content">
       <div class="reader-title" id="title"></div>

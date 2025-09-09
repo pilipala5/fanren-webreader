@@ -21,6 +21,11 @@
       padding:8px 12px;
       box-shadow:0 8px 30px rgba(0,0,0,.05);
     }
+    /* 放在你现有 <style> 的任意位置，建议紧跟 .reader-content/.bottom-nav 后面 */
+    .reader-content,
+    .bottom-nav{
+      box-sizing: border-box; /* 确保 100% 宽里包含 padding 和 border，不会“溢出”或看起来窄一丢丢 */
+    }
     .nav-btn{min-width:96px}
     :root{ --content-size: 19px; }
     #content{ white-space: pre-wrap; line-height: 1.9; font-size: var(--content-size); }

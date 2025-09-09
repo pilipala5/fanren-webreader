@@ -8,120 +8,13 @@
   <style>
     .reader-wrap{display:grid;gap:12px}
     .reader-header{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-    .reader-content {
-      background: #fff;
-      border: 1px solid #e0e0e0;
-      border-radius: 12px;
-      padding: 16px;
-      box-shadow: 0 8px 30px rgba(0,0,0,.05);
-    }
+    .reader-content{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px;box-shadow:0 8px 30px rgba(0,0,0,.05)}
     .reader-title{font-weight:700;margin-bottom:8px}
     .bottom-nav{display:flex;gap:10px;justify-content:center}
     .nav-btn{min-width:96px}
     :root{ --content-size: 19px; }
     #content{ white-space: pre-wrap; line-height: 1.9; font-size: var(--content-size); }
-
-/* ======== Mobile & content overflow fixes (local to viewer.html) ======== */
-html, body { overflow-x: hidden; }
-
-/* 1) Robust line breaking for long words/URLs */
-#content{
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-/* 2) Reader container width constraints for readability */
-.reader-content{
-  width: 100%;
-  max-width: 72ch;
-  margin-inline: auto;
-}
-
-/* 3) Prevent media/blocks from causing horizontal scroll */
-.reader-content img,
-.reader-content video,
-.reader-content table,
-.reader-content pre,
-.reader-content code{
-  max-width: 100%;
-  overflow: auto;
-}
-
-/* 4) Bottom nav is allowed to wrap on small screens */
-.bottom-nav{ flex-wrap: wrap; }
-.nav-btn{
-  min-width: 88px;          /* override 原 96px，减小窄屏压力 */
-  flex: 1 1 auto;           /* 小屏可均分并换行 */
-  max-width: 240px;
-}
-
-/* 5) Header select shouldn't overflow */
-.reader-header select{ max-width: 100%; }
-
-/* 极窄屏时，给默认字号轻微下调（不影响你的字号切换逻辑） */
-@media (max-width: 380px){
-  :root{ --content-size: 17px; }
-}
   </style>
-</head>
-<body>
-  <div class="topbar">
-    <div class="container row">
-      <a class="btn" href="/">← 返回首页</a>
-      <div class="brand">灵阅书屋</div>
-      <div class="spacer"></div>
-      <label>字号：
-        <select id="fs">
-          <option value="small">小</option>
-          <option value="medium" selected>中</option>
-          <option value="large">大</option>
-        </select>
-      </label>
-    </div>
-  </div>
-
-  <div class="container">
-    <div class="reader-wrap">
-      <div class="reader-header">
-        <div class="row">
-          <label>来源：
-            <select id="mode">
-              <option value="builtin" selected>内置书籍</option>
-              <option value="remote">服务器书籍</option>
-            </select>
-          </label>
-          <label>书籍：
-            <select id="book"></select>
-          </label>
-          <label>章节：
-            <select id="chapter"></select>
-          </label>
-          <button class="btn" id="reload">刷新章节</button>
-        </div>
-        <div class="spacer"></div>
-        <div class="row">
-          <button class="btn" id="backTop">回到顶部</button>
-          <button class="btn" id="saveProgress">保存进度</button>
-          <button class="btn" id="loadProgress">恢复进度</button>
-        </div>
-      </div>
-
-      <div class="reader-content">
-        <div class="reader-title" id="title">标题</div>
-        <div id="content"></div>
-      </div>
-
-      <div class="bottom-nav">
-        <button class="btn nav-btn" id="prev">上一章</button>
-        <button class="btn nav-btn" id="next">下一章</button>
-      </div>
-    </div>
-  </div>
-
-  <div class="container footer">
-    <div>QQ: 407292550 · WeChat: gdb1314_ · Email: yuhan.huang@whu.edu.cn</div>
-  </div>
-
   <script>
     /* ===================== 基础状态 ===================== */
     const FS = { small: 16, medium: 19, large: 22 };
@@ -129,17 +22,18 @@ html, body { overflow-x: hidden; }
       { key: '凡人修仙传', manifest: '凡人修仙传/manifest.json' },
       { key: '凡人修仙传·仙界篇', manifest: '凡人修仙传·仙界篇/manifest.json' },
     ];
+
     const state = {
-      mode: 'builtin',
-      api: false,
-      books: [],    // remote 用
-      manifest: null,
+      mode: null,           // 'builtin' | 'server'
+      bookKey: null,        // builtin:书名 | server:'srv:<id>'
+      serverId: null,       // 服务器书籍 id（数字字符串）
       chapters: [],
       currentIndex: 0,
       font: 'medium',
-      loading: false,
-      loggedIn: false,
-      user: null
+      api: false,
+      userName: null,
+      manifests: {},
+      encoding: 'utf-8',
     };
 
     const $ = (id) => document.getElementById(id);
@@ -154,11 +48,11 @@ html, body { overflow-x: hidden; }
       if(!state.api) return;
       try{
         const r=await fetch('/api/auth/me');
-        if(r.ok){ const j=await r.json(); if(j&&j.ok&&j.loggedIn){ state.loggedIn=true; state.user=j.user; } }
+        if(r.ok){ const j=await r.json(); if(j&&j.ok&&j.loggedIn){ state.userName=j.username; } }
       }catch{}
     }
 
-    /* ===================== 字号 ===================== */
+    /* ===================== 偏好 & 进度 ===================== */
     function setFont(key){
       const size = FS[key] ?? FS.medium;
       state.font = key in FS ? key : 'medium';
@@ -166,173 +60,236 @@ html, body { overflow-x: hidden; }
       try{ localStorage.setItem('novel:fs', state.font);}catch{}
       $('fs').value = state.font;
     }
-
-    /* ===================== 内置/远程 书目 ===================== */
-    function fillBuiltinBooks(){
-      const sel = $('book'); sel.innerHTML = '';
-      for(const b of BUILTINS){
-        const op = document.createElement('option');
-        op.value = b.key; op.textContent = b.key; op.dataset.manifest = b.manifest;
-        sel.appendChild(op);
-      }
+    function saveLast(){
+      try{ localStorage.setItem('novel:last', JSON.stringify({ book: state.bookKey, index: state.currentIndex })); }catch{}
     }
-    async function loadRemoteBooks(){
-      const sel = $('book'); sel.innerHTML = '';
-      if(!state.api){ return; }
+    function saveProgressLocal(){
+      try{ localStorage.setItem('novel:p:'+state.bookKey, String(state.currentIndex)); }catch{}
+    }
+    async function saveProgressServer(){
+      if(!state.api || !state.userName) return;
       try{
-        const r=await fetch('/api/books');
-        if(!r.ok) return;
-        const j = await r.json();
-        if(!Array.isArray(j)) return;
-        state.books = j;
-        for(const b of j){
-          const op = document.createElement('option');
-          op.value = b.key; op.textContent = b.name || b.key; op.dataset.manifest = b.manifest;
-          sel.appendChild(op);
-        }
+        await fetch('/api/progress', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ book: state.bookKey, index: state.currentIndex })
+        });
+      }catch{}
+    }
+    async function loadProgress(){
+      // 1) 优先服务端
+      if(state.api){
+        try{
+          const r = await fetch('/api/progress?book='+encodeURIComponent(state.bookKey));
+          if(r.ok){
+            const j = await r.json();
+            if(j && j.ok && Number.isFinite(+j.index) && +j.index>0){
+              state.currentIndex = +j.index;
+              return;
+            }
+          }
+        }catch{}
+      }
+      // 2) 本地
+      try{
+        const s = localStorage.getItem('novel:p:'+state.bookKey);
+        if(s!==null && Number.isFinite(+s) && +s>0){ state.currentIndex = +s; }
       }catch{}
     }
 
-    /* ===================== 章节装载 ===================== */
-    async function loadManifest(url){
-      const r = await fetch(url);
-      if(!r.ok) throw new Error('manifest 加载失败');
-      const j = await r.json();
-      if(!Array.isArray(j?.chapters)) throw new Error('manifest 结构不合法');
-      state.manifest = j;
-      state.chapters = j.chapters;
-      fillChapters();
+    /* ===================== 工具函数 ===================== */
+    async function fetchJSON(url){
+      const r=await fetch(url);
+      if(!r.ok) throw new Error('加载失败 '+url);
+      return await r.json();
     }
-    function fillChapters(){
-      const sel = $('chapter'); sel.innerHTML = '';
-      state.chapters.forEach((c, i) => {
-        const op = document.createElement('option');
-        op.value = i; op.textContent = c.title || `第 ${i+1} 章`;
-        sel.appendChild(op);
-      });
-      sel.value = state.currentIndex;
-    }
-
-    async function loadChapter(i){
-      i = Math.max(0, Math.min(i, state.chapters.length - 1));
-      state.currentIndex = i;
-      const chap = state.chapters[i];
-      $('title').textContent = chap.title || `第 ${i+1} 章`;
-      $('chapter').value = i;
-
-      $('content').textContent = '加载中...';
-      try{
-        const r = await fetch(chap.url);
-        if(!r.ok) throw new Error('章节加载失败');
-        const t = await r.text();
-        $('content').textContent = t;
-        window.scrollTo({top:0, behavior:'smooth'});
-      }catch(e){
-        $('content').textContent = '加载失败：' + e.message;
+    async function fetchText(url, encoding='utf-8'){
+      const enc = String(encoding||'utf-8').toLowerCase();
+      if(enc==='utf-8' || enc==='utf8'){
+        const r=await fetch(url); if(!r.ok) throw new Error('加载失败 '+url); return await r.text();
       }
+      const r = await fetch(url); if(!r.ok) throw new Error('加载失败 '+url);
+      const buf = await r.arrayBuffer();
+      const mapped = (enc==='gb2312'||enc==='gbk')? 'gb18030' : enc;
+      const dec = new TextDecoder(mapped, { fatal:false });
+      return dec.decode(buf);
     }
 
-    /* ===================== 进度保存/恢复 ===================== */
-    function saveProgress(){
-      try{
-        const key = `novel:${state.mode}:${getBookKey()}`;
-        localStorage.setItem(key, String(state.currentIndex));
-        alert('已保存到本地');
-      }catch{ alert('保存失败'); }
+    // 渲染前：去掉正文开头重复标题 & 收敛空行（兼容旧数据）
+    function normalizeForRender(title, text){
+      let lines = String(text||'').replace(/\r\n?/g,'\n').split('\n');
+      const t = norm(title);
+      for(let k=0;k<2;k++){ if(lines.length && norm(lines[0])===t) lines.shift(); }
+      let s = lines.join('\n').replace(/\n{3,}/g,'\n\n').replace(/^\n+/, '');
+      return s;
     }
-    function loadProgress(){
-      try{
-        const key = `novel:${state.mode}:${getBookKey()}`;
-        const v = localStorage.getItem(key);
-        if(v!=null){
-          const idx = parseInt(v,10);
-          if(!Number.isNaN(idx)){ loadChapter(idx); return; }
-        }
-        alert('没有可恢复的进度');
-      }catch{ alert('读取失败'); }
+
+    /* ===================== 初始化 & 章节装载 ===================== */
+    async function loadBuiltinsManifests(){
+      for(const b of BUILTINS){ try{ state.manifests[b.key]=await fetchJSON(b.manifest); }catch{} }
     }
-    function getBookKey(){
+
+    async function resolveFromParams(){
+      const p = new URLSearchParams(location.search);
+      const book = p.get('book');
+      const srv = p.get('srv');
+      if (book) { state.mode='builtin'; state.bookKey=book; return; }
+      if (srv)  { state.mode='server'; state.serverId=String(srv); state.bookKey='srv:'+state.serverId; return; }
+      // fallback: 最近阅读
+      try{
+        const last = JSON.parse(localStorage.getItem('novel:last')||'null');
+        if(last&&last.book){ state.bookKey=last.book; if(/^srv:\d+/.test(last.book)){ state.mode='server'; state.serverId=last.book.replace(/^srv:/,''); } else { state.mode='builtin'; } state.currentIndex = Number(last.index)||0; return; }
+      }catch{}
+      // 再不行就默认第一本内置书
+      state.mode='builtin'; state.bookKey=BUILTINS[0].key;
+    }
+
+    async function loadChapters(){
       if(state.mode==='builtin'){
-        return $('book').value;
-      }else{
-        const sel = $('book');
-        const op = sel.options[sel.selectedIndex];
-        return op?.value || '';
+        const mf = BUILTINS.find(b=>b.key===state.bookKey);
+        const m = state.manifests[state.bookKey] || (mf? await fetchJSON(m.manifest) : null);
+        state.encoding = (m&&m.encoding)||'utf-8';
+        state.chapters = Array.isArray(m?.chapters)? m.chapters.map(c=>({ index:c.index, title:c.title, file:c.file })) : [];
+        if(!state.currentIndex) state.currentIndex = state.chapters[0]?.index || 0;
+      } else if (state.mode==='server') {
+        const j = await fetchJSON(`/api/books/${encodeURIComponent(state.serverId)}`);
+        if(!j||!j.ok) throw new Error('服务器书籍不存在');
+        state.chapters = (j.chapters||[]).map(c=>({ index:c.index, title:c.title }));
+        if(!state.currentIndex) state.currentIndex = state.chapters[0]?.index || 0;
       }
+    }
+
+    function buildChapterSelect(){
+      const sel=$('chapter'); sel.innerHTML='';
+      for(const c of state.chapters){
+        const opt=document.createElement('option');
+        opt.value=String(c.index);
+        opt.textContent=`${String(c.index).padStart(4,'0')} · ${c.title}`;
+        sel.appendChild(opt);
+      }
+      sel.value = String(state.currentIndex);
+    }
+
+    /* ===================== 渲染 & 导航 ===================== */
+    async function loadAndRender(){
+      const chap = state.chapters.find(c=>Number(c.index)===Number(state.currentIndex));
+      if(!chap){ $('title').textContent=''; $('content').textContent=''; return; }
+
+      $('chapter').value = String(state.currentIndex);
+      $('title').textContent = chap.title || ('第 '+state.currentIndex+' 章');
+
+      let text = '';
+      if(state.mode==='builtin'){
+        const mf = BUILTINS.find(b=>b.key===state.bookKey);
+        const base = (mf && mf.manifest.includes('/')) ? mf.manifest.slice(0, mf.manifest.lastIndexOf('/')) : '';
+        const file = (chap.file||'').replace(/^\/+/, '');
+        const url = base? (base + '/' + file) : file;
+        text = await fetchText(url, state.encoding);
+      } else if (state.mode==='server') {
+        const url = `/api/books/${encodeURIComponent(state.serverId)}/chapter/${encodeURIComponent(state.currentIndex)}`;
+        const r = await fetch(url);
+        if(!r.ok) throw new Error('加载失败 '+url);
+        text = await r.text();
+      }
+
+      $('content').textContent = normalizeForRender(chap.title, text);
+
+      // 边界按钮状态
+      $('prev').disabled = (state.currentIndex <= (state.chapters[0]?.index || 1));
+      $('next').disabled = (state.currentIndex >= (state.chapters[state.chapters.length-1]?.index || state.currentIndex));
+
+      // 写入进度（本地 + 服务器 + 最近阅读）
+      saveProgressLocal();
+      saveProgressServer();
+      saveLast();
+
+      // 回到顶部（修复“翻章后不在顶部”）
+      if(document.scrollingElement){
+        document.scrollingElement.scrollTo({top:0, behavior:'instant'});
+      }else{
+        window.scrollTo(0,0);
+      }
+    }
+
+    function goto(delta){
+      const list = state.chapters.map(c=>c.index);
+      const pos = list.indexOf(state.currentIndex);
+      if(pos<0) return;
+      const nextPos = pos + delta;
+      if(nextPos<0 || nextPos>=list.length) return;
+      state.currentIndex = list[nextPos];
+      loadAndRender();
     }
 
     /* ===================== 事件绑定 ===================== */
-    function bindEvents(){
-      $('fs').addEventListener('change', e=> setFont(e.target.value));
-      $('mode').addEventListener('change', async e=>{
-        state.mode = e.target.value;
-        if(state.mode==='builtin'){ fillBuiltinBooks(); afterBookChanged(); }
-        else { await loadRemoteBooks(); afterBookChanged(); }
-      });
-      $('book').addEventListener('change', afterBookChanged);
-      $('chapter').addEventListener('change', e=> loadChapter(parseInt(e.target.value,10)));
-      $('reload').addEventListener('click', ()=> loadChapter(state.currentIndex));
-      $('prev').addEventListener('click', ()=> loadChapter(state.currentIndex - 1));
-      $('next').addEventListener('click', ()=> loadChapter(state.currentIndex + 1));
-      $('backTop').addEventListener('click', ()=> window.scrollTo({top:0, behavior:'smooth'}));
-      $('saveProgress').addEventListener('click', saveProgress);
-      $('loadProgress').addEventListener('click', loadProgress);
+    function bind(){
+      $('prev').addEventListener('click', ()=> goto(-1));
+      $('next').addEventListener('click', ()=> goto(1));
+      $('chapter').addEventListener('change', (e)=>{ state.currentIndex = Number(e.target.value)||state.currentIndex; loadAndRender(); });
+      $('fs').addEventListener('change', (e)=> setFont(e.target.value));
 
-      // 键盘左右键翻页
+      // 键盘左右翻章
       window.addEventListener('keydown', (e)=>{
-        if(e.key==='ArrowLeft'){ e.preventDefault(); $('prev').click(); }
-        if(e.key==='ArrowRight'){ e.preventDefault(); $('next').click(); }
-      }, {passive:false});
+        if(e.target && /input|textarea|select/i.test(e.target.tagName)) return;
+        if(e.key==='ArrowLeft') goto(-1);
+        if(e.key==='ArrowRight') goto(1);
+      });
     }
 
-    async function afterBookChanged(){
-      const sel = $('book');
-      const op = sel.options[sel.selectedIndex];
-      const manifest = op?.dataset?.manifest;
-      if(!manifest){ $('content').textContent = '未选择书籍'; return; }
-      try{
-        await loadManifest(manifest);
-        await loadChapter(0);
-      }catch(e){
-        $('content').textContent = '加载失败：' + e.message;
-      }
+    /* ===================== 启动流程 ===================== */
+    async function init(){
+      // 字号偏好
+      try{ setFont(localStorage.getItem('novel:fs')||'medium'); }catch{ setFont('medium'); }
+
+      await pingAPI();
+      await authMe();
+      await loadBuiltinsManifests();
+      await resolveFromParams();
+      await loadChapters();
+      // 读取进度（服务端优先，本地兜底）
+      await loadProgress();
+      buildChapterSelect();
+      bind();
+      loadAndRender();
     }
-
-    /* ===================== 启动 ===================== */
-    (async function boot(){
-      try{
-        // 1. API 健康检查 + 授权
-        await pingAPI(); await authMe();
-
-        // 2. 字号初始化
-        try{
-          const v = localStorage.getItem('novel:fs');
-          if(v && v in FS){ state.font = v; }
-        }catch{}
-        setFont(state.font);
-
-        // 3. 模式 + 书目
-        const modeSel = $('mode');
-        if(state.api){
-          // 远程可用，保留默认“内置”，用户可切换
-        }else{
-          // 远程不可用，直接锁定为内置
-          state.mode = 'builtin';
-          modeSel.value = 'builtin';
-          modeSel.disabled = true;
-        }
-
-        // 4. 装载初始书目与章节
-        fillBuiltinBooks();
-        await afterBookChanged();
-
-        // 5. 事件
-        bindEvents();
-      }catch(e){
-        console.error(e);
-        $('content').textContent = '初始化失败：' + e.message;
-      }
-    })();
+    window.addEventListener('DOMContentLoaded', init);
   </script>
+</head>
+<body>
+  <div class="topbar">
+    <div class="container row">
+      <a class="btn" href="/">← 返回首页</a>
+      <div class="brand">阅读器</div>
+      <div class="spacer"></div>
+      <label>字号：
+        <select id="fs">
+          <option value="small">小</option>
+          <option value="medium" selected>中</option>
+          <option value="large">大</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <div class="container reader-wrap">
+    <div class="reader-header">
+      <label>章节：
+        <select id="chapter"></select>
+      </label>
+    </div>
+
+    <div class="reader-content">
+      <div class="reader-title" id="title"></div>
+      <div id="content"></div>
+    </div>
+
+    <div class="bottom-nav">
+      <button class="btn nav-btn" id="prev">上一章</button>
+      <button class="btn nav-btn" id="next">下一章</button>
+    </div>
+  </div>
+
+  <div class="container footer">
+    <div>QQ: 407292550 · WeChat: gdb1314_ · Email: yuhan.huang@whu.edu.cn</div>
+  </div>
 </body>
 </html>

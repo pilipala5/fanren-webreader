@@ -58,6 +58,18 @@
     @media (max-width:380px){
       :root{ --content-size:17px; }
     }
+
+    /* ===================== 手机端定向优化（不影响平板/电脑） ===================== */
+    @media (max-width:600px){
+      /* 关键：允许工具区子项收缩，避免被长章节名称撑爆换行 */
+      .tools{ flex-wrap:nowrap; gap:8px; max-width:100%; overflow:hidden; }
+      .tools label{ flex:1 1 0; min-width:0; }        /* 子项可收缩 */
+      .tools select{ width:100%; min-width:0; }       /* 选择器随容器缩放 */
+      /* 限制“字号”选择器占位，给“章节”更多空间 */
+      #fs{ flex:0 0 110px; width:auto; }
+      /* 进一步兜底，确保章节选择器不会无限变宽（受视口限制） */
+      #chapter{ max-width:70vw; }
+    }
   </style>
 
   <script>
@@ -214,6 +226,16 @@
     }
 
     /* ===================== 渲染 & 导航 ===================== */
+    function scrollToTopAfterRender(){
+      // 先清除焦点，避免移动端浏览器把焦点元素滚回视野
+      try{ if(document.activeElement) document.activeElement.blur(); }catch{}
+      // 等待一帧再滚动，确保内容与按钮状态已更新
+      requestAnimationFrame(()=>{
+        const scroller = document.scrollingElement || document.documentElement || document.body;
+        scroller.scrollTo({ top: 0, behavior: 'auto' });
+      });
+    }
+
     async function loadAndRender(){
       const chap = state.chapters.find(c=>Number(c.index)===Number(state.currentIndex));
       if(!chap){ $('title').textContent=''; $('content').textContent=''; return; }
@@ -244,11 +266,8 @@
       saveProgressServer();
       saveLast();
 
-      if(document.scrollingElement){
-        document.scrollingElement.scrollTo({top:0, behavior:'instant'});
-      }else{
-        window.scrollTo(0,0);
-      }
+      // 移动端稳定回到顶部（见上面的解释）
+      scrollToTopAfterRender();
     }
 
     function goto(delta){
@@ -263,8 +282,15 @@
 
     /* ===================== 事件绑定 ===================== */
     function bind(){
-      $('prev').addEventListener('click', ()=> goto(-1));
-      $('next').addEventListener('click', ()=> goto(1));
+      $('prev').addEventListener('click', (e)=>{
+        // 先移除焦点，避免焦点把视口“拉回去”
+        try{ e.currentTarget.blur(); }catch{}
+        goto(-1);
+      });
+      $('next').addEventListener('click', (e)=>{
+        try{ e.currentTarget.blur(); }catch{}
+        goto(1);
+      });
       $('chapter').addEventListener('change', (e)=>{ state.currentIndex = Number(e.target.value)||state.currentIndex; loadAndRender(); });
       $('fs').addEventListener('change', (e)=> setFont(e.target.value));
 

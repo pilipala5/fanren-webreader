@@ -121,7 +121,12 @@
       try{ localStorage.setItem('novel:last', JSON.stringify({ book: state.bookKey, index: state.currentIndex })); }catch{}
     }
     function saveProgressLocal(){
-      try{ localStorage.setItem('novel:p:'+state.bookKey, String(state.currentIndex)); }catch{}
+      try{
+        const k = 'novel:p:'+state.bookKey;
+        const prev = Number(localStorage.getItem(k) || '0') || 0;
+        const next = Math.max(prev, Number(state.currentIndex)||0);
+        localStorage.setItem(k, String(next));
+      }catch{}
     }
     async function saveProgressServer(){
       if(!state.api || !state.userName) return;
@@ -133,22 +138,26 @@
       }catch{}
     }
     async function loadProgress(){
+      let serverIdx = 0;
+      let localIdx = 0;
       if(state.api){
         try{
           const r = await fetch('/api/progress?book='+encodeURIComponent(state.bookKey));
           if(r.ok){
             const j = await r.json();
-            if(j && j.ok && Number.isFinite(+j.index) && +j.index>0){
-              state.currentIndex = +j.index;
-              return;
+            if(j && j.ok){
+              if(Number.isFinite(+j.index)) serverIdx = Math.max(0, +j.index);
+              if(!serverIdx && j.items && j.items[state.bookKey]) serverIdx = Math.max(0, +j.items[state.bookKey]);
             }
           }
         }catch{}
       }
       try{
         const s = localStorage.getItem('novel:p:'+state.bookKey);
-        if(s!==null && Number.isFinite(+s) && +s>0){ state.currentIndex = +s; }
+        if(s!==null && Number.isFinite(+s) && +s>0){ localIdx = +s; }
       }catch{}
+      const base = state.chapters[0]?.index || 0;
+      state.currentIndex = Math.max(base, Number(state.currentIndex)||0, serverIdx, localIdx);
     }
 
     /* ===================== 工具函数 ===================== */
@@ -235,6 +244,21 @@
         scroller.scrollTo({ top: 0, behavior: 'auto' });
       });
     }
+
+    // iOS Safari: 强化翻章后滚动到顶部的兼容处理
+    // 通过覆盖函数，避免受旧实现影响
+    scrollToTopAfterRender = function(){
+      try{ if(document.activeElement) document.activeElement.blur(); }catch{}
+      const forceTop = ()=>{
+        try{ if(window.getSelection) window.getSelection().removeAllRanges(); }catch{}
+        const se = document.scrollingElement || document.documentElement || document.body;
+        try{ se.scrollTop = 0; }catch{}
+        try{ document.documentElement.scrollTop = 0; }catch{}
+        try{ document.body.scrollTop = 0; }catch{}
+        try{ window.scrollTo({ top:0, left:0, behavior:'auto' }); }catch{ try{ window.scrollTo(0,0); }catch{} }
+      };
+      requestAnimationFrame(()=>{ forceTop(); setTimeout(forceTop, 0); });
+    };
 
     async function loadAndRender(){
       const chap = state.chapters.find(c=>Number(c.index)===Number(state.currentIndex));

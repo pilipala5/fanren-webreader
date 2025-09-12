@@ -40,7 +40,20 @@ export async function onRequestGet({ request, env }) {
   const username = await requireUser(request, env);
   if (!username) return json(request, { ok: false, error: 'unauthorized' }, { status: 401 });
   try {
-    const { results } = await env.DB.prepare('SELECT book, idx FROM progress WHERE username = ?').bind(username).all();
+    const url = new URL(request.url);
+    const book = (url.searchParams.get('book') || '').trim();
+    if (book) {
+      const row = await env.DB
+        .prepare('SELECT idx FROM progress WHERE username = ? AND book = ?')
+        .bind(username, book)
+        .first();
+      const index = row ? Number(row.idx) : 0;
+      return json(request, { ok: true, book, index });
+    }
+    const { results } = await env.DB
+      .prepare('SELECT book, idx FROM progress WHERE username = ?')
+      .bind(username)
+      .all();
     const items = {};
     for (const row of results || []) items[row.book] = Number(row.idx);
     return json(request, { ok: true, username, items });
@@ -61,8 +74,9 @@ export async function onRequestPost({ request, env }) {
       for (const [book, idxRaw] of Object.entries(data.items)) {
         const idx = Number.parseInt(idxRaw, 10);
         if (!book || Number.isNaN(idx)) continue;
+        // Monotonic update: never decrease idx
         stmts.push(env.DB
-          .prepare('INSERT INTO progress(username, book, idx, updated_at) VALUES(?,?,?,?) ON CONFLICT(username, book) DO UPDATE SET idx=excluded.idx, updated_at=excluded.updated_at')
+          .prepare('INSERT INTO progress(username, book, idx, updated_at) VALUES(?,?,?,?) ON CONFLICT(username, book) DO UPDATE SET idx = MAX(idx, excluded.idx), updated_at = CASE WHEN excluded.idx > idx THEN excluded.updated_at ELSE updated_at END')
           .bind(username, String(book), idx, now));
       }
       if (stmts.length) await env.DB.batch(stmts);
@@ -71,8 +85,9 @@ export async function onRequestPost({ request, env }) {
     const book = String(data?.book || '').trim();
     const idx = Number.parseInt(data?.index, 10);
     if (!book || Number.isNaN(idx)) return json(request, { ok: false, error: 'missing book/index' }, { status: 400 });
+    // Monotonic update: never decrease idx
     await env.DB
-      .prepare('INSERT INTO progress(username, book, idx, updated_at) VALUES(?,?,?,?) ON CONFLICT(username, book) DO UPDATE SET idx=excluded.idx, updated_at=excluded.updated_at')
+      .prepare('INSERT INTO progress(username, book, idx, updated_at) VALUES(?,?,?,?) ON CONFLICT(username, book) DO UPDATE SET idx = MAX(idx, excluded.idx), updated_at = CASE WHEN excluded.idx > idx THEN excluded.updated_at ELSE updated_at END')
       .bind(username, book, idx, now)
       .run();
     return json(request, { ok: true });
